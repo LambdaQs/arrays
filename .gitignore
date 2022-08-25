@@ -27,3 +27,16 @@ setup.log
 
 # Local OPAM switch
 _opam/
+
+## BNFC
+*.bak
+*.info
+*.x
+*.y
+*LambdaQs.h*
+*LambdaQs.ml*
+BNFC_Util.ml
+bnfc.mk
+DocLambdaQs.txt
+ErrM.hs
+TestLambdaQs
