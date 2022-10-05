@@ -5,7 +5,7 @@ open Printf
 let unimplemented_error s = "Not yet implemented: " ^ s
 
 let rec elab (prog : AbsQSharp.doc) : AbsLambdaQs.cmd =
-  match prog with 
+  match prog with
   | Prog ([ns]) -> elab_nmspace ns
   | _ -> failwith (unimplemented_error "Multiple namespaces")
 
@@ -16,26 +16,26 @@ and elab_nmspace (ns : AbsQSharp.nmspace) : AbsLambdaQs.cmd =
 
 and elab_nselmts (elmts : AbsQSharp.nSElmnt list) : AbsLambdaQs.cmd =
   match elmts with
-  (* TODO: de we always want to return empty? *)
+  (* TODO: do we always want to return empty? *)
   | [] -> CRet (ETriv)
   (* TODO: do something with imports *)
   | NSOp _ :: elmts -> elab_nselmts elmts
   | NSOpAs _ :: elmts -> elab_nselmts elmts
   | NSTy _ :: _ -> failwith (unimplemented_error "Type declarations (NSTy)")
   (* TODO: do something with declaration prefix *)
-  | NSCall (_, calld) :: t -> 
+  | NSCall (_, calld) :: t ->
       let (name, body) = elab_calldec calld in
       AbsLambdaQs.CBnd (name, body, elab_nselmts t)
 
 and curry (params : AbsQSharp.param list) (body : AbsQSharp.body) : AbsLambdaQs.exp =
   match params with
   | [] -> failwith (unimplemented_error "Empty parameter list")
-  | [ParNI (NItem (Ident arg,typ))] -> 
+  | [ParNI (NItem (Ident arg,typ))] ->
       AbsLambdaQs.proc (MVar (Ident arg), elab_type typ, elab_body body)
-  | (ParNI (NItem (Ident arg,typ))) :: t -> 
+  | (ParNI (NItem (Ident arg,typ))) :: t ->
       AbsLambdaQs.ELam (MVar (Ident arg), elab_type typ, curry t body)
   | _ -> failwith (unimplemented_error "Nested paramss (ParNIA)")
-      
+
 
 and elab_calldec (calld : AbsQSharp.callDec) : AbsLambdaQs.var * AbsLambdaQs.exp =
   match calld with
@@ -43,7 +43,7 @@ and elab_calldec (calld : AbsQSharp.callDec) : AbsLambdaQs.var * AbsLambdaQs.exp
   (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
   | CDOp (Ident name, TAEmpty, params, typ, _, body) ->
      (match params with
-      | ParTpl params -> 
+      | ParTpl params ->
           (MVar (Ident name), curry params body)
       | _ -> failwith (unimplemented_error "Operations with multiple arguments"))
   | _ -> failwith (unimplemented_error "Operations with type parameters (tyArg)")
