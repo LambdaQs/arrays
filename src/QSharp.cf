@@ -226,7 +226,7 @@ ERangeL.  Exp1  ::= "..." Exp1;
 ERangeLR. Exp   ::= "...";                  -- 2
 EUpdate.  Exp   ::= Exp "w/" Exp "<-" Exp1; -- 1
 
-coercions Exp 21 ;
+coercions Exp 22 ;
 
 separator Exp ",";
 
@@ -245,7 +245,7 @@ token TIdent '\'' letter (letter | digit | '_' | '\'')*;
 token QIdent letter (letter | digit | '_')* ('.' letter (letter | digit | '_')*)+;
 
 
---For some reason, just having these lines here breaks things??? even if they are not called. Why does this happen? 
+--For some reason, just having these lines here breaks things??? even if they are not called. Why does this happen?
 token UndIdent ('_' | letter) (letter | digit | '_' | '\'')*;
 -- this should be the same as UndIdent but its not??
--- token TestIdent letter (letter | digit | '_' | '\'')*;  
+-- token TestIdent letter (letter | digit | '_' | '\'')*;
