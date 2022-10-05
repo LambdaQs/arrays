@@ -10,7 +10,7 @@ make
 ./TestLambdaQs
 ```
 
-The binary lets us enter expressions, pressing Ctrl-D will parse them and exit the app. One can also pass input through stdin:
+The binary lets us enter expressions. Pressing Ctrl-D will parse them and exit the app. One can also pass input through stdin:
 
 ```
 ❯ echo "cmd D(I, X; q1, q2)" | ./TestLambdaQs
@@ -25,7 +25,7 @@ q1, q2)
 ```
 
 # Extending the source
-`make genclean` will clean up most of the auto-generated files except those by `bnfc`. Write modules assuming existence of the remaining source files which include those for the AST, the lexer and the parser specs, the print and show infrastructure, etc.
+`make genclean` will clean up most of the auto-generated files except those by `bnfc`. Write modules assuming the existence of the remaining source files, which include those for the AST, the lexer and the parser specs, the print and show infrastructure, etc.
 
 # Examples from QAlgol (QPL '22):
 
