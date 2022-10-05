@@ -40,3 +40,6 @@ bnfc.mk
 DocLambdaQs.txt
 ErrM.hs
 TestLambdaQs
+*QSharp.h*
+*QSharp.ml*
+TestQSharp
