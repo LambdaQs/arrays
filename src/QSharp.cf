@@ -172,7 +172,7 @@ separator QbitInit ",";
 -- Expressions
 EEmp.     Exp21 ::= "_";
 EName.    Exp21 ::= QName;
-ENameT.   Exp21 ::= QName "<" [Typ] ">"; -- TODO conflicting with ELt in several tests ({DrawManyTests,UniformSuperpositionPreparationTests,DeprecatedRandom,QFT,Transposition,EnumerationTests,Multidimensional,Convert,Facts,Predicates,Modular,GeneratorRepresentation,ControlledOnTruthTable,QuantumROMTests,}.qs)
+ENameT.   Exp21 ::= QName "<" [Typ] ">"; -- TODO conflicting with ELt in several tests ({DrawManyTests,UniformSuperpositionPreparationTests,DeprecatedRandom,QFT,Transposition,EnumerationTests,Multidimensional,Convert,Facts,Predicates,Modular,GeneratorRepresentation,ControlledOnTruthTable,QuantumROMTests,Arrays,Synthesis,And,Functions,MultiplexerTests}.qs)
 EInt.     Exp21 ::= Int;
 EBInt.    Exp21 ::= BigInt;
 EDbl.     Exp21 ::= Doubl;
@@ -184,7 +184,7 @@ EPli.     Exp21 ::= PliL;
 ETp.      Exp21 ::= "(" [Exp] ")";
 EArr.     Exp21 ::= "[" [Exp] "]";
 ESArr.    Exp21 ::= "[" Exp "," ArSizeEq Exp "]";
--- ELamFn.   Exp21   ::= Bnd "->" Exp21; -- TODO function lambdas
+-- ELamFn.   Exp21   ::= Bnd "->" Exp21; -- TODO function lambdas (QuantumROM.qs)
 -- ELamOp.   Exp21   ::= Bnd "=>" Exp21; -- TODO operation lambdas (SinglyControlled.qs)
 -- see git:qsharp-compiler/src/QsCompiler/TextProcessor/QsKeywords.fs
 -- Combinators (calls and array items) & Modifiers (functors and unwrap)
