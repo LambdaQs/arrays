@@ -172,7 +172,7 @@ separator QbitInit ",";
 -- Expressions
 EEmp.     Exp21 ::= "_";
 EName.    Exp21 ::= QName;
-ENameT.   Exp21 ::= QName "<" [Typ] ">"; -- TODO conflicting with ELt in several tests ({DrawManyTests,UniformSuperpositionPreparationTests,DeprecatedRandom,QFT,Transposition}.qs)
+ENameT.   Exp21 ::= QName "<" [Typ] ">"; -- TODO conflicting with ELt in several tests ({DrawManyTests,UniformSuperpositionPreparationTests,DeprecatedRandom,QFT,Transposition,EnumerationTests}.qs)
 EInt.     Exp21 ::= Int;
 EBInt.    Exp21 ::= BigInt;
 EDbl.     Exp21 ::= Doubl;
@@ -189,7 +189,7 @@ ESArr.    Exp21 ::= "[" Exp "," ArSizeEq Exp "]";
 -- see git:qsharp-compiler/src/QsCompiler/TextProcessor/QsKeywords.fs
 -- Combinators (calls and array items) & Modifiers (functors and unwrap)
 EUnwrap.  Exp20 ::= Exp20 "!";            -- 1000
-EItem.    Exp19 ::= Exp19 "::" UIdent;     -- 1100
+EItem.    Exp20 ::= Exp20 "::" UIdent;    -- 1100
 EIndex.   Exp19 ::= Exp19 "[" Exp "]";    -- 1100
 ECtrl.    Exp18 ::= "Controlled" Exp18;   -- 951
 EAdj.     Exp18 ::= "Adjoint" Exp18;      -- 950
