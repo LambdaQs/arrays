@@ -172,8 +172,9 @@ separator QbitInit ",";
 -- Expressions
 EEmp.     Exp21 ::= "_";
 EName.    Exp21 ::= QName;
-ENameT.   Exp21 ::= QName "<" [Typ] ">"; -- TODO conflicting with ELt in several tests
-EInt.     Exp21 ::= Integer;
+ENameT.   Exp21 ::= QName "<" [Typ] ">"; -- TODO conflicting with ELt in several tests (DrawManyTests.qs)
+EInt.     Exp21 ::= Int;
+EBInt.    Exp21 ::= BigInt;
 EDbl.     Exp21 ::= Double;
 EStr.     Exp21 ::= String;
 EStrI.    Exp21 ::= "$" String;
@@ -184,7 +185,7 @@ ETp.      Exp21 ::= "(" [Exp] ")";
 EArr.     Exp21 ::= "[" [Exp] "]";
 ESArr.    Exp21 ::= "[" Exp "," "size" "=" Exp "]";
 -- ELamFn.   Exp21   ::= Bnd "->" Exp21; -- TODO function lambdas
--- ELamOp.   Exp21   ::= Bnd "=>" Exp21; -- TODO operation lambdas
+-- ELamOp.   Exp21   ::= Bnd "=>" Exp21; -- TODO operation lambdas (SinglyControlled.qs)
 -- see git:qsharp-compiler/src/QsCompiler/TextProcessor/QsKeywords.fs
 -- Combinators (calls and array items) & Modifiers (functors and unwrap)
 EItem.    Exp20 ::= Exp20 "::" Ident;     -- 1100
@@ -240,3 +241,7 @@ PliZ  . PliL ::= "PauliZ";
 
 token TIdent '\'' letter (letter | digit | '_' | '\'')*;
 token QIdent letter (letter | digit | '_')* ('.' letter (letter | digit | '_')*)+;
+
+-- TODO also define and include binary
+token Int     digit+ | ('0' ('x'|'X') (digit | ["abcdef"] | ["ABCDEF"])+) | ('0'["01234567"]*);
+token BigInt (digit+ | ('0' ('x'|'X') (digit | ["abcdef"] | ["ABCDEF"])+) | ('0'["01234567"]*))  ('l'|'L');
