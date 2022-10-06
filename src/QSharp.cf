@@ -76,6 +76,7 @@ SNBody.   SpecName ::= "body";
 SNAdj.    SpecName ::= "adjoint";
 SNCtl.    SpecName ::= "controlled";
 SNCtlAdj. SpecName ::= "controlled" "adjoint";
+SNAdjCtl. SpecName ::= "adjoint" "controlled"; -- TODO inelegant
 
 SGScope.  SpecGen ::= Scope;
 SGImpl.   SpecGen ::= SpecParamTpl Scope;
