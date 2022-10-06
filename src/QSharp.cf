@@ -172,7 +172,7 @@ separator QbitInit ",";
 -- Expressions
 EEmp.     Exp21 ::= "_";
 EName.    Exp21 ::= QName;
-ENameT.   Exp21 ::= QName "<" [Typ] ">"; -- TODO conflicting with ELt in several tests (DrawManyTests.qs,UniformSuperpositionPreparationTests.qs)
+ENameT.   Exp21 ::= QName "<" [Typ] ">"; -- TODO conflicting with ELt in several tests ({DrawManyTests,UniformSuperpositionPreparationTests,DeprecatedRandom}.qs)
 EInt.     Exp21 ::= Int;
 EBInt.    Exp21 ::= BigInt;
 EDbl.     Exp21 ::= Doubl;
@@ -195,6 +195,7 @@ ECtrl.    Exp18 ::= "Controlled" Exp18;   -- 951
 EAdj.     Exp18 ::= "Adjoint" Exp18;      -- 950
 ECall.    Exp17 ::= Exp17 "(" [Exp] ")";  -- 900
 -- Operators
+EPos.     Exp16 ::= "+"   Exp16;          -- 45
 ENeg.     Exp16 ::= "-"   Exp16;          -- 45
 ELNot.    Exp16 ::= "not" Exp16;          -- 45
 EBNot.    Exp16 ::= "~~~" Exp16;          -- 45
