@@ -175,7 +175,7 @@ EName.    Exp21 ::= QName;
 ENameT.   Exp21 ::= QName "<" [Typ] ">"; -- TODO conflicting with ELt in several tests (DrawManyTests.qs,UniformSuperpositionPreparationTests.qs)
 EInt.     Exp21 ::= Int;
 EBInt.    Exp21 ::= BigInt;
-EDbl.     Exp21 ::= Double;
+EDbl.     Exp21 ::= Doubl;
 EStr.     Exp21 ::= String;
 EStrI.    Exp21 ::= "$" String;
 EBool.    Exp21 ::= BoolL;
@@ -245,3 +245,5 @@ token QIdent letter (letter | digit | '_')* ('.' letter (letter | digit | '_')*)
 -- TODO also define and include binary
 token Int     digit+ | ('0' ('x'|'X') (digit | ["abcdef"] | ["ABCDEF"])+) | ('0'["01234567"]*);
 token BigInt (digit+ | ('0' ('x'|'X') (digit | ["abcdef"] | ["ABCDEF"])+) | ('0'["01234567"]*))  ('l'|'L');
+
+token Doubl (digit+ '.' digit+ (('e'|'E') '-'? digit+)?) | digit+ ('e'|'E') '-'? digit+
