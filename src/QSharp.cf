@@ -10,12 +10,12 @@ NDec . Nmspace ::= "namespace" QName "{" [NSElmnt] "}";
 terminator Nmspace "";
 terminator NSElmnt "";
 
-QUnqual. QName ::= Ident;
+QUnqual. QName ::= UIdent;
 QQual.   QName ::= QIdent;
 
 NSOp   . NSElmnt ::= "open" QName ";";
 NSOpAs . NSElmnt ::= "open" QName "as" QName ";";
-NSTy   . NSElmnt ::= DeclPrefix "newtype" Ident "=" UType ";" ;
+NSTy   . NSElmnt ::= DeclPrefix "newtype" UIdent "=" UType ";" ;
 NSCall . NSElmnt ::= DeclPrefix CallDec;
 
 DPrefix. DeclPrefix ::= [Attr] Access;
@@ -37,12 +37,12 @@ separator TyTplItem ",";
 TTIName. TyTplItem ::= NamedItem;
 TTIUTyp. TyTplItem ::= UType;
 
-NItem . NamedItem ::= Ident ":" Typ;
+NItem . NamedItem ::= UIdent ":" Typ;
 
 -- Callable Declaration
 
-CDFun . CallDec ::= "function"  Ident TyArg ParamTpl ":" Typ Body;
-CDOp  . CallDec ::= "operation" Ident TyArg ParamTpl ":" Typ Chars Body;
+CDFun . CallDec ::= "function"  UIdent TyArg ParamTpl ":" Typ Body;
+CDOp  . CallDec ::= "operation" UIdent TyArg ParamTpl ":" Typ Chars Body;
 
 TAEmpty . TyArg ::= ;
 TAList  . TyArg ::= "<" [TIdent] ">";
@@ -90,7 +90,7 @@ SpecParTpl. SpecParamTpl ::= "(" [SpecParam] ")";
 
 separator SpecParam ",";
 
-SPVar.   SpecParam ::= Ident;
+SPVar.   SpecParam ::= UIdent;
 SPSubst. SpecParam ::= "...";
 SPTpl.   SpecParam ::= SpecParamTpl;
 
@@ -126,8 +126,8 @@ SFail.   Stm ::= "fail" Exp";";
 SLet.    Stm ::= "let" Bnd "=" Exp ";";
 SMut.    Stm ::= "mutable" Bnd "=" Exp ";";
 SSet.    Stm ::= "set" Bnd "=" Exp ";";
-SSetOp.  Stm ::= "set" Ident SetOp Exp ";";
-SSetW.   Stm ::= "set" Ident "w/=" Exp "<-" Exp ";";
+SSetOp.  Stm ::= "set" UIdent SetOp Exp ";";
+SSetW.   Stm ::= "set" UIdent "w/=" Exp "<-" Exp ";";
 SIf.     Stm ::= "if" Exp Scope;
 SEIf.    Stm ::= "elif" Exp Scope;
 SElse.   Stm ::= "else" Scope;
@@ -156,7 +156,7 @@ SoLAnd.   SetOp ::= "and=";
 SoLOr.    SetOp ::= "or=";
 
 BndWild . Bnd ::= "_";
-BndName . Bnd ::= Ident;
+BndName . Bnd ::= UIdent;
 BndTplA . Bnd ::= "(" [Bnd] ")";
 
 separator Bnd ",";
@@ -189,7 +189,7 @@ ESArr.    Exp21 ::= "[" Exp "," ArSizeEq Exp "]";
 -- see git:qsharp-compiler/src/QsCompiler/TextProcessor/QsKeywords.fs
 -- Combinators (calls and array items) & Modifiers (functors and unwrap)
 EUnwrap.  Exp20 ::= Exp20 "!";            -- 1000
-EItem.    Exp19 ::= Exp19 "::" Ident;     -- 1100
+EItem.    Exp19 ::= Exp19 "::" UIdent;     -- 1100
 EIndex.   Exp19 ::= Exp19 "[" Exp "]";    -- 1100
 ECtrl.    Exp18 ::= "Controlled" Exp18;   -- 951
 EAdj.     Exp18 ::= "Adjoint" Exp18;      -- 950
@@ -242,6 +242,7 @@ PliZ  . PliL ::= "PauliZ";
 
 token TIdent '\'' letter (letter | digit | '_' | '\'')*;
 token QIdent letter (letter | digit | '_')* ('.' letter (letter | digit | '_')*)+;
+token UIdent ('_')? letter (letter | digit | '_')*;
 
 -- TODO also define and include binary
 token Int     digit+ | ('0' ('x'|'X') (digit | ["abcdef"] | ["ABCDEF"])+) | ('0'["01234567"]*);
