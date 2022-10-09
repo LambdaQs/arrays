@@ -10,8 +10,11 @@ TQref. Typ ::= "qref" "[" Key "]";          -- qubit reference
 TParr. Typ ::= Typ "->" Typ;                -- partial function
 TCmd.  Typ ::= "cmd" "(" Typ ")";           -- command
 TProd. Typ ::= Typ "*" Typ;
+TArr.  Typ ::= Typ "[" "]";
 TBool. Typ ::= "bool";
 TUnit. Typ ::= "unit";
+TStr.  Typ ::= "string";
+TInt.  Typ ::= "int";
 
 -- Expressions
 EVar.  Exp ::= Var;
