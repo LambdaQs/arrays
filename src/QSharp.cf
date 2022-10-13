@@ -127,7 +127,7 @@ SLet.    Stm ::= "let" Bnd "=" Exp ";";
 SMut.    Stm ::= "mutable" Bnd "=" Exp ";";
 SSet.    Stm ::= "set" Bnd "=" Exp ";";
 SSetOp.  Stm ::= "set" UIdent SetOp Exp ";";
-SSetW.   Stm ::= "set" UIdent "w/=" Exp "<-" Exp ";";
+SSetW.   Stm ::= "set" UIdent "w/=" Exp LARR Exp ";";
 SIf.     Stm ::= "if" Exp Scope;
 SEIf.    Stm ::= "elif" Exp Scope;
 SElse.   Stm ::= "else" Scope;
@@ -172,7 +172,7 @@ separator QbitInit ",";
 -- Expressions
 EEmp.     Exp21 ::= "_";
 EName.    Exp21 ::= QName;
-ENameT.   Exp21 ::= QName "<" [Typ] ">"; -- TODO conflicting with ELt in several tests ({DrawManyTests,UniformSuperpositionPreparationTests,DeprecatedRandom,QFT,Transposition,EnumerationTests,Multidimensional,Convert,Facts,Predicates,Modular,GeneratorRepresentation,ControlledOnTruthTable,QuantumROMTests,Arrays,Synthesis,And,Functions,MultiplexerTests}.qs)
+ENameT.   Exp21 ::= QName "<" [Typ] ">";
 EInt.     Exp21 ::= Int;
 EBInt.    Exp21 ::= BigInt;
 EDbl.     Exp21 ::= Doubl;
@@ -206,11 +206,11 @@ EMod.     Exp14 ::= Exp14 "%" Exp15;
 EAdd.     Exp13 ::= Exp13 "+" Exp14;
 ESub.     Exp13 ::= Exp13 "-" Exp14;
 EShiftR.  Exp12 ::= Exp12 ">>>" Exp13;
-EShiftL.  Exp12 ::= Exp12 "<<<" Exp13;
+EShiftL.  Exp12 ::= Exp12 SHFTL Exp13;
 EGt.      Exp11 ::= Exp11 ">"  Exp12;
 EGte.     Exp11 ::= Exp11 ">=" Exp12;
-ELt.      Exp11 ::= Exp11 "<"  Exp12;
-ELte.     Exp11 ::= Exp11 "<=" Exp12;
+ELt.      Exp11 ::= Exp11 LT   Exp12;
+ELte.     Exp11 ::= Exp11 LTE  Exp12;
 EEq.      Exp10 ::= Exp10 "==" Exp11;
 ENeq.     Exp10 ::= Exp10 "!=" Exp11;
 EBAnd.    Exp9  ::= Exp9 "&&&" Exp10;
@@ -223,7 +223,7 @@ ERange.   Exp3  ::= Exp3 ".." Exp4;         -- 2
 ERangeR.  Exp2  ::= Exp2 "...";
 ERangeL.  Exp1  ::= "..." Exp1;
 ERangeLR. Exp   ::= "...";                  -- 2
-EUpdate.  Exp   ::= Exp "w/" Exp "<-" Exp1; -- 1
+EUpdate.  Exp   ::= Exp "w/" Exp LARR Exp1; -- 1
 
 coercions Exp 21 ;
 
@@ -251,3 +251,8 @@ token BigInt (digit+ | ('0' ('x'|'X') (digit | ["abcdef"] | ["ABCDEF"])+) | ('0'
 token Doubl (digit+ '.' digit+ (('e'|'E') '-'? digit+)?) | digit+ ('e'|'E') '-'? digit+;
 
 token ArSizeEq 's' 'i' 'z' 'e' ' ' '=';
+
+token LT ' ' '<';
+token LTE ' ' '<' '=';
+token SHFTL ' ' '<' '<' '<';
+token LARR ' ' '<' '-';
