@@ -248,7 +248,7 @@ token UIdent ('_')? letter (letter | digit | '_')*;
 token Int     digit+ | ('0' ('x'|'X') (digit | ["abcdef"] | ["ABCDEF"])+) | ('0'["01234567"]*);
 token BigInt (digit+ | ('0' ('x'|'X') (digit | ["abcdef"] | ["ABCDEF"])+) | ('0'["01234567"]*))  ('l'|'L');
 
-token Doubl (digit+ '.' digit+ (('e'|'E') '-'? digit+)?) | digit+ ('e'|'E') '-'? digit+;
+token Doubl (digit* '.' digit+ (('e'|'E') '-'? digit+)?) | digit+ ('e'|'E') '-'? digit+;
 
 token ArSizeEq 's' 'i' 'z' 'e' ' ' '=';
 
