@@ -59,11 +59,12 @@ ParNIA . Param ::= ParamTpl ;
 CEmpty. Chars ::= ;
 CIs.    Chars ::= "is" CharsExp;
 
-CEAdj.   CharsExp ::= "Adj";
-CECtl.   CharsExp ::= "Ctl";
-CEParen. CharsExp ::= "(" CharsExp ")";
-CETimes. CharsExp ::= CharsExp "*" CharsExp;
-CEPlus.  CharsExp ::= CharsExp "+" CharsExp;
+CEAdj.   CharsExp2 ::= "Adj";
+CECtl.   CharsExp2 ::= "Ctl";
+CETimes. CharsExp1 ::= CharsExp1 "*" CharsExp2;
+CEPlus.  CharsExp ::= CharsExp "+" CharsExp1;
+
+coercions CharsExp 2 ;
 
 separator Spec "";
 
