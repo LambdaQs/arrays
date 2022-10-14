@@ -102,7 +102,7 @@ separator Stm "";
 -- Types
 TEmp  . Typ ::= "_";
 TPar  . Typ ::= TIdent;
-TQNm  . Typ ::= QName;
+TUDT  . Typ ::= QName;
 TTpl  . Typ ::= "(" [Typ] ")";
 TFun  . Typ ::= Typ "->" Typ;
 TOp   . Typ ::= Typ "=>" Typ Chars;
