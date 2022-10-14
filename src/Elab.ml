@@ -1,9 +1,20 @@
 open AbsLambdaQs
 open AbsQSharp
 open Printf
+open Map
 
 let unimplemented_error s = "Not yet implemented: " ^ s
 
+module Strmap = Map.Make(String)
+
+(* the type of an environment. TODO: figure out specifically how this works *)
+type env_t = { vars : (AbsLambdaQs.typ) Strmap.t }
+
+type 
+
+
+(* should also take in signature (stack data struc to keep track of Qubits) and 
+   context (to keep track of variables and types) *)
 let rec elab (prog : AbsQSharp.doc) : AbsLambdaQs.cmd =
   match prog with
   | Prog ([ns]) -> elab_nmspace ns
@@ -77,14 +88,56 @@ and elab_body (body : AbsQSharp.body) : AbsLambdaQs.cmd =
   | BSpec _ -> failwith (unimplemented_error "Specializations (BSpec)")
   | BScope (Scp stmts) -> elab_stmts stmts
 
+
+
 and elab_stmts (stmts : AbsQSharp.stm list) : AbsLambdaQs.cmd =
   match stmts with
   (* TODO: shouldn't always return empty *)
   | [] -> CRet ETriv
   (* TODO: in general, we'll want to use CBnd -- what var should we bind to? *)
-  | (SExp exp) :: [] -> AbsLambdaQs.CRet (elab_exp exp)
-  | (SRet exp) :: [] -> AbsLambdaQs.CRet (elab_exp exp)
-  | _ -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+
+  (* TODO: this is wrong since sometimes we want CGap *)
+  | (SExp exp) :: [] -> AbsLambdaQs.CRet (elab_exp exp) 
+  | (SExp exp) :: stmts' -> failwith (unimplemented_error "must determine exp")
+  | (SRet exp) :: _ -> AbsLambdaQs.CRet (elab_exp exp) (* should things after return statement be ignored? *)
+  | SFail exp :: stmts' -> failwith (unimplemented_error "(SFail)")
+  | (SLet (bnd, exp)) :: stmts' -> 
+    (match bnd with 
+     | BndWild -> elab_stmts stmts' (* TODO: may want to account for unpure 'let _ = ... ' statements *)
+     | BndName (UIdent var) -> CBnd (MVar (Ident var), elab_exp exp, elab_stmts stmts')
+     | BndTplA bnds -> failwith (unimplemented_error "list binds"))
+  (* TODO: what differentiates SLet, SMut, and SSet? *)
+  | (SMut (bnd, exp)) :: stmts' -> 
+    (match bnd with 
+     | BndWild -> elab_stmts stmts' 
+     | BndName (UIdent var) -> CBnd (MVar (Ident var), elab_exp exp, elab_stmts stmts')
+     | BndTplA bnds -> failwith (unimplemented_error "list binds"))
+  | (SSet (bnd, exp)) :: stmts' -> 
+      (match bnd with 
+       | BndWild -> elab_stmts stmts' 
+       | BndName (UIdent var) -> CBnd (MVar (Ident var), elab_exp exp, elab_stmts stmts')
+       | BndTplA bnds -> failwith (unimplemented_error "list binds"))
+  | SSetOp (UIdent arg, sOp, exp) :: stmts' -> failwith (unimplemented_error "SSetOp")
+  | SSetW (UIdent arg, exp1, exp2) :: stmts' -> failwith (unimplemented_error "SSetW")
+  (* TODO: look up how these are done in other languages since the implementation here is probably similar *)
+  (* I have some ideas for how this would work, but gets translated to exp anyways and not cmd *)
+  (* will either need to figure out what VAR to bind to as in the above or do CRet (EIte)  *)
+  | (SIf (exp, scope)) :: stmts' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | (SEIf (exp, scope)) :: stmts' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | (SElse scope) :: stmts' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | (SFor (bnd, exp, scope)) :: stmts' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | (SWhile (exp, scope)) :: stmts' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  
+  (* TODO: can we assume that when SUntil appears, SRep must have come before? *)
+  | (SRep scope) :: stms' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | (SUntil exp) :: stms'  -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | (SUntilF (exp, scope)) :: stms' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  
+  | (SWithin scope) :: stms' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | (SApply scope) :: stms' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  
+  | (SUse qbitBnd) :: stms' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | (SUseS (qbitBnd, scope)) :: stms' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
 
 
 and elab_exp (exp : AbsQSharp.exp) : AbsLambdaQs.exp =
