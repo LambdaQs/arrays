@@ -10,8 +10,9 @@ NDec . Nmspace ::= "namespace" QName "{" [NSElmnt] "}";
 terminator Nmspace "";
 terminator NSElmnt "";
 
-QUnqual. QName ::= UIdent;
-QQual.   QName ::= QIdent;
+QQual.   QName ::= [UIdent];
+
+separator nonempty UIdent "."; -- TODO / FIXME might accept names separated by spaces
 
 NSOp   . NSElmnt ::= "open" QName ";";
 NSOpAs . NSElmnt ::= "open" QName "as" QName ";";
@@ -102,7 +103,6 @@ separator Stm "";
 -- Types
 TEmp  . Typ ::= "_";
 TPar  . Typ ::= TIdent;
-TQNm  . Typ ::= QName;
 TTpl  . Typ ::= "(" [Typ] ")";
 TFun  . Typ ::= Typ "->" Typ;
 TOp   . Typ ::= Typ "=>" Typ Chars;
@@ -117,6 +117,7 @@ TRng  . Typ ::= "Range" ;
 TRes  . Typ ::= "Result";
 TStr  . Typ ::= "String";
 TUnit . Typ ::= "Unit"  ;
+TUDT  . Typ ::= QName;
 
 separator Typ ",";
 
@@ -242,7 +243,6 @@ PliY  . PliL ::= "PauliY";
 PliZ  . PliL ::= "PauliZ";
 
 token TIdent '\'' letter (letter | digit | '_' | '\'')*;
-token QIdent letter (letter | digit | '_')* ('.' letter (letter | digit | '_')*)+;
 token UIdent ('_')? letter (letter | digit | '_')*;
 
 -- TODO also define and include binary
