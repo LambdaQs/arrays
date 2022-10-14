@@ -43,3 +43,5 @@ TestLambdaQs
 *QSharp.h*
 *QSharp.ml*
 TestQSharp
+TestElab
+DocQSharp.*
