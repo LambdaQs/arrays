@@ -10,7 +10,7 @@ module Strmap = Map.Make(String)
 (* the type of an environment. TODO: figure out specifically how this works *)
 type env_t = { vars : (AbsLambdaQs.typ) Strmap.t }
 
-type 
+
 
 
 (* should also take in signature (stack data struc to keep track of Qubits) and 
@@ -123,8 +123,11 @@ and elab_stmts (stmts : AbsQSharp.stm list) : AbsLambdaQs.cmd =
   (* I have some ideas for how this would work, but gets translated to exp anyways and not cmd *)
   (* will either need to figure out what VAR to bind to as in the above or do CRet (EIte)  *)
   | (SIf (exp, scope)) :: stmts' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | (SEIf (exp, scope)) :: stmts' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | (SElse scope) :: stmts' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+
+
+  (* these must come after if, so wont be dealt with here *)
+  | (SEIf (exp, scope)) :: stmts' -> failwith ("Elif statement does not occur after an If statement")
+  | (SElse scope) :: stmts' -> failwith ("Else statement does not occur after an If statement")
   | (SFor (bnd, exp, scope)) :: stmts' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
   | (SWhile (exp, scope)) :: stmts' -> failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
   
@@ -146,6 +149,16 @@ and elab_exp (exp : AbsQSharp.exp) : AbsLambdaQs.exp =
   | ECall (e1, [e2]) -> AbsLambdaQs.EAp(elab_exp e1, elab_exp e2)
   | ECall (e1, [e2; e3]) -> AbsLambdaQs.EAp((AbsLambdaQs.EAp(elab_exp e1, elab_exp e2)), elab_exp e2)
   | _ -> failwith (unimplemented_error "Most expressions")
+
+
+(* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
+let rec extract_ifs (stmts : AbsQSharp.stm list) : (stmts' : (AbsQSharp.stm list * AbsQSharp.stm list)) = 
+  match stmts with 
+  | (SEIf p) :: stmts' -> let (ifs, stmts'') = extract_ifs stmts' 
+                          in ((SEIf p) :: ifs, stmts'')
+  | (SElse scope) :: stmts' -> ([(SElse scope)], stmts')
+  | _ -> ([], stmts)
+
 
 (* Example: *)
 let parse (c : in_channel) : AbsQSharp.doc =
