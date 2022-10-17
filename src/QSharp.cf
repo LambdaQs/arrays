@@ -32,7 +32,7 @@ AInternal . Access ::= "internal";
 UTTpl  . UType ::= "(" [TyTplItem] ")";
 UTETyp . UType ::= Typ;
 
-separator TyTplItem ",";
+separator nonempty TyTplItem ",";
 
 TTIName. TyTplItem ::= NamedItem;
 TTIUTyp. TyTplItem ::= UType;
@@ -102,7 +102,7 @@ separator Stm "";
 -- Types
 TEmp  . Typ ::= "_";
 TPar  . Typ ::= TIdent;
-TQNm  . Typ ::= QName;
+TUDT  . Typ ::= QName;
 TTpl  . Typ ::= "(" [Typ] ")";
 TFun  . Typ ::= Typ "->" Typ;
 TOp   . Typ ::= Typ "=>" Typ Chars;
@@ -160,7 +160,7 @@ BndWild . Bnd ::= "_";
 BndName . Bnd ::= UIdent;
 BndTplA . Bnd ::= "(" [Bnd] ")";
 
-separator Bnd ",";
+separator nonempty Bnd ",";
 
 QBnd. QbitBnd ::= Bnd "=" QbitInit;
 

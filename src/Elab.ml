@@ -155,7 +155,7 @@ and elab_exp (exp : AbsQSharp.exp) : AbsLambdaQs.exp =
 let rec extract_ifs (stmts : AbsQSharp.stm list) : (stmts' : (AbsQSharp.stm list * AbsQSharp.stm list)) = 
   match stmts with 
   | (SEIf p) :: stmts' -> let (ifs, stmts'') = extract_ifs stmts' 
-                          in ((SEIf p) :: ifs, stmts'')
+                          in ((SEIf p) :: ifs,)
   | (SElse scope) :: stmts' -> ([(SElse scope)], stmts')
   | _ -> ([], stmts)
 
