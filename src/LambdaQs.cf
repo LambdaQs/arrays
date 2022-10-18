@@ -29,6 +29,10 @@ ETrue. Exp ::= "true";
 EFls.  Exp ::= "false";
 EIte.  Exp ::= "if" Exp "then" Exp "else" Exp;
 ENot.  Exp ::= "not" Exp;
+-- TODO: make sure precedence is correct here
+EEq.   Exp ::= Exp "==" Exp; 
+EAdd.  Exp ::= Exp "+" Exp;
+EInt.  Exp ::= Integer;
 ETriv. Exp ::= "()";
 ERef.  Exp ::= Exp "requires" Ref "ensures" Ref; -- TODO
 
