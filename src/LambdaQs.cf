@@ -6,44 +6,47 @@ MUni. Uni ::= Ident; -- unitaries
 MKey. Key ::= Ident; -- qubit symbols/unique keys
 
 -- Types
-TQref. Typ ::= "qref" "[" Key "]";          -- qubit reference
-TParr. Typ ::= Typ "->" Typ;                -- partial function
-TCmd.  Typ ::= "cmd" "(" Typ ")";           -- command
-TProd. Typ ::= Typ "*" Typ;
+TQref. Typ ::= "qref" "<" Key ">";          -- qubit reference
+TFun.  Typ ::= "fun"  "(" Typ ";" Typ ")";  -- function
+TCmd.  Typ ::= "cmd"  "(" Typ ")";          -- command
+TProd. Typ ::= "prod" "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
 TArr.  Typ ::= Typ "[" "]";
-TBool. Typ ::= "bool";
 TUnit. Typ ::= "unit";
+TBool. Typ ::= "bool";
 TStr.  Typ ::= "string";
 TInt.  Typ ::= "int";
 
 -- Expressions
 EVar.  Exp ::= Var;
-ELet.  Exp ::= "let" Var "be" Exp "in" Exp;   -- let expression
-ELam.  Exp ::= "\\" "(" Var ":" Typ ")" Exp;  -- lambda abstraction
-EAp.   Exp ::= Exp "(" Exp ")";               -- application
-ECmd.  Exp ::= "cmd" Cmd;                     -- encapsulation
-EQloc. Exp ::= "&" Key;                       -- qubit locations
-ETpl.  Exp ::= "(" Exp "," Exp ")";
-EProj. Exp ::= Exp "." Integer;               -- currently just 1 or 2 as these are pairs
+ELet.  Exp ::= "let" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Exp ")";  -- let expression
+ELam.  Exp ::= "\\"  "[" Typ ";" Typ "]" "(" Var "." Exp ")";           -- lambda abstraction
+EAp.   Exp ::= "ap"  "[" Typ ";" Typ "]" "(" Exp ";" Exp ")";           -- application
+ECmd.  Exp ::= "cmd" "[" Typ "]" Cmd;                                   -- encapsulation
+EQloc. Exp ::= "&" Key;                                                 -- qubit locations TODO: still needed?
+EProj. Exp ::= "proj" "<" Integer ">" "[" Typ ";" Typ "]" "(" Exp ")";  -- currently just 1 or 2 as these are pairs
+EPair. Exp ::= "pair" "[" Typ ";" Typ "]" "(" Exp ";" Exp ")";          -- TODO: support variadic tuples
+ETriv. Exp ::= "<>";                                                    -- can also call it null
 ETrue. Exp ::= "true";
 EFls.  Exp ::= "false";
-EIte.  Exp ::= "if" Exp "then" Exp "else" Exp;
-ENot.  Exp ::= "not" Exp;
+EIte.  Exp ::= "if" "[" Typ "]" "(" Exp ";" Exp ";" Exp ")";
+-- ENot.  Exp ::= "not" Exp;
 -- TODO: make sure precedence is correct here
 EEq.   Exp ::= Exp "==" Exp;
 EAdd.  Exp ::= Exp "+" Exp;
 EInt.  Exp ::= Integer;
-ETriv. Exp ::= "()";
-ERef.  Exp ::= Exp "requires" Ref "ensures" Ref; -- TODO
+-- ERef.  Exp ::= Exp "requires" Ref "ensures" Ref; -- TODO
+
+internal EVarT. Exp ::= "(" Var ":" Typ ")";
 
 -- Commands
-CRet.   Cmd ::= "ret" Exp;                                -- return
-CBnd.   Cmd ::= "bnd" Var "<-" Exp ";" Cmd;               -- sequence
-CNew.   Cmd ::= "new" Var "in" Cmd;                       -- new qubit reference
-CGap.   Cmd ::= Uni "(" Exp ")";                          -- unitary gate application
-CDiag.  Cmd ::= "D" "(" Uni "," Uni ";" Exp "," Exp ")";  -- diagonal gate application
-CMeas.  Cmd ::= "meas" "(" Exp ")";                       -- measurement
+CRet.   Cmd ::= "ret" "[" Typ "]" Exp;                                  -- return
+CBnd.   Cmd ::= "bnd" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Cmd ")"; -- sequence
+CNew.   Cmd ::= "new" Var "in" Cmd;                                     -- new qubit reference
+CGap.   Cmd ::= Uni "(" Exp ")";                                        -- unitary gate application
+CDiag.  Cmd ::= "D" "(" Uni "," Uni ";" Exp "," Exp ")";                -- diagonal gate application
+CMeas.  Cmd ::= "meas" "(" Exp ")";                                     -- measurement
 
+{-
 -- Refinements
 REq.  Ref ::= Var "=" Integer;
 
@@ -67,5 +70,4 @@ define proc x t m = ELam x t (ECmd m);
 -- This encoding also requires an explicit variable argument
 pcall. Exp ::= "call" Exp "(" Exp ")" Var;
 define pcall e1 e2 x = ECmd (CBnd x (EAp e1 e2) (CRet (EVar x)));;
-
-internal EVarT. Exp ::= "(" Var ":" Typ ")";
+-}

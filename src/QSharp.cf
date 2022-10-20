@@ -20,7 +20,7 @@ NSCall . NSElmnt ::= DeclPrefix CallDec;
 
 DPrefix. DeclPrefix ::= [Attr] Access;
 
-AAttr. Attr ::= "@" Exp;
+AAttr. Attr ::= "@" Expr;
 
 terminator Attr "";
 
@@ -30,19 +30,19 @@ AInternal . Access ::= "internal";
 -- Type Declaration
 
 UTTpl  . UType ::= "(" [TyTplItem] ")";
-UTETyp . UType ::= Typ;
+UTETyp . UType ::= Tp;
 
 separator nonempty TyTplItem ",";
 
 TTIName. TyTplItem ::= NamedItem;
 TTIUTyp. TyTplItem ::= UType;
 
-NItem . NamedItem ::= UIdent ":" Typ;
+NItem . NamedItem ::= UIdent ":" Tp;
 
 -- Callable Declaration
 
-CDFun . CallDec ::= "function"  UIdent TyArg ParamTpl ":" Typ Body;
-CDOp  . CallDec ::= "operation" UIdent TyArg ParamTpl ":" Typ Chars Body;
+CDFun . CallDec ::= "function"  UIdent TyArg ParamTpl ":" Tp Body;
+CDOp  . CallDec ::= "operation" UIdent TyArg ParamTpl ":" Tp Chars Body;
 
 TAEmpty . TyArg ::= ;
 TAList  . TyArg ::= "<" [TIdent] ">";
@@ -100,43 +100,43 @@ Scp . Scope ::= "{" [Stm] "}";
 separator Stm "";
 
 -- Types
-TEmp  . Typ ::= "_";
-TPar  . Typ ::= TIdent;
-TUDT  . Typ ::= QName;
-TTpl  . Typ ::= "(" [Typ] ")";
-TFun  . Typ ::= Typ "->" Typ;
-TOp   . Typ ::= Typ "=>" Typ Chars;
-TArr  . Typ ::= Typ "[" "]";
-TBInt . Typ ::= "BigInt";
-TBool . Typ ::= "Bool"  ;
-TDbl  . Typ ::= "Double";
-TInt  . Typ ::= "Int"   ;
-TPli  . Typ ::= "Pauli" ;
-TQbit . Typ ::= "Qubit" ;
-TRng  . Typ ::= "Range" ;
-TRes  . Typ ::= "Result";
-TStr  . Typ ::= "String";
-TUnit . Typ ::= "Unit"  ;
+TEmp  . Tp ::= "_";
+TPar  . Tp ::= TIdent;
+TUDT  . Tp ::= QName;
+TTpl  . Tp ::= "(" [Tp] ")";
+TFun  . Tp ::= Tp "->" Tp;
+TOp   . Tp ::= Tp "=>" Tp Chars;
+TArr  . Tp ::= Tp "[" "]";
+TBInt . Tp ::= "BigInt";
+TBool . Tp ::= "Bool"  ;
+TDbl  . Tp ::= "Double";
+TInt  . Tp ::= "Int"   ;
+TPli  . Tp ::= "Pauli" ;
+TQbit . Tp ::= "Qubit" ;
+TRng  . Tp ::= "Range" ;
+TRes  . Tp ::= "Result";
+TStr  . Tp ::= "String";
+TUnit . Tp ::= "Unit"  ;
 
-separator Typ ",";
+separator Tp ",";
 
 -- Statement
-SExp.    Stm ::= Exp ";";
-SRet.    Stm ::= "return" Exp";";
-SFail.   Stm ::= "fail" Exp";";
-SLet.    Stm ::= "let" Bnd "=" Exp ";";
-SMut.    Stm ::= "mutable" Bnd "=" Exp ";";
-SSet.    Stm ::= "set" Bnd "=" Exp ";";
-SSetOp.  Stm ::= "set" UIdent SetOp Exp ";";
-SSetW.   Stm ::= "set" UIdent "w/=" Exp LARR Exp ";";
-SIf.     Stm ::= "if" Exp Scope;
-SEIf.    Stm ::= "elif" Exp Scope;
+SExp.    Stm ::= Expr ";";
+SRet.    Stm ::= "return" Expr";";
+SFail.   Stm ::= "fail" Expr";";
+SLet.    Stm ::= "let" Bnd "=" Expr ";";
+SMut.    Stm ::= "mutable" Bnd "=" Expr ";";
+SSet.    Stm ::= "set" Bnd "=" Expr ";";
+SSetOp.  Stm ::= "set" UIdent SetOp Expr ";";
+SSetW.   Stm ::= "set" UIdent "w/=" Expr LARR Expr ";";
+SIf.     Stm ::= "if" Expr Scope;
+SEIf.    Stm ::= "elif" Expr Scope;
 SElse.   Stm ::= "else" Scope;
-SFor.    Stm ::= "for" Bnd "in" Exp Scope;
-SWhile.  Stm ::= "while" Exp Scope;
+SFor.    Stm ::= "for" Bnd "in" Expr Scope;
+SWhile.  Stm ::= "while" Expr Scope;
 SRep.    Stm ::= "repeat" Scope;
-SUntil.  Stm ::= "until" Exp ";";
-SUntilF. Stm ::= "until" Exp "fixup" Scope;
+SUntil.  Stm ::= "until" Expr ";";
+SUntilF. Stm ::= "until" Expr "fixup" Scope;
 SWithin. Stm ::= "within" Scope;
 SApply.  Stm ::= "apply" Scope;
 SUse.    Stm ::= "use" QbitBnd ";";
@@ -165,70 +165,70 @@ separator nonempty Bnd ",";
 QBnd. QbitBnd ::= Bnd "=" QbitInit;
 
 QInitS. QbitInit ::= "Qubit" "(" ")";
-QInitA. QbitInit ::= "Qubit" "[" Exp "]";
+QInitA. QbitInit ::= "Qubit" "[" Expr "]";
 QInitT. QbitInit ::= "(" [QbitInit] ")";
 
 separator QbitInit ",";
 
 -- Expressions
-EEmp.     Exp21 ::= "_";
-EName.    Exp21 ::= QName;
-ENameT.   Exp21 ::= QName "<" [Typ] ">";
-EInt.     Exp21 ::= Int;
-EBInt.    Exp21 ::= BigInt;
-EDbl.     Exp21 ::= Doubl;
-EStr.     Exp21 ::= String;
-EStrI.    Exp21 ::= "$" String;
-EBool.    Exp21 ::= BoolL;
-ERes.     Exp21 ::= ResL;
-EPli.     Exp21 ::= PliL;
-ETp.      Exp21 ::= "(" [Exp] ")";
-EArr.     Exp21 ::= "[" [Exp] "]";
-ESArr.    Exp21 ::= "[" Exp "," ArSizeEq Exp "]";
--- ELamFn.   Exp21   ::= Bnd "->" Exp21; -- TODO function lambdas (QuantumROM.qs)
--- ELamOp.   Exp21   ::= Bnd "=>" Exp21; -- TODO operation lambdas (SinglyControlled.qs)
+EEmp.     Expr21 ::= "_";
+EName.    Expr21 ::= QName;
+ENameT.   Expr21 ::= QName "<" [Tp] ">";
+EInt.     Expr21 ::= Int;
+EBInt.    Expr21 ::= BigInt;
+EDbl.     Expr21 ::= Doubl;
+EStr.     Expr21 ::= String;
+EStrI.    Expr21 ::= "$" String;
+EBool.    Expr21 ::= BoolL;
+ERes.     Expr21 ::= ResL;
+EPli.     Expr21 ::= PliL;
+ETp.      Expr21 ::= "(" [Expr] ")";
+EArr.     Expr21 ::= "[" [Expr] "]";
+ESArr.    Expr21 ::= "[" Expr "," ArSizeEq Expr "]";
+-- ELamFn.   Expr21   ::= Bnd "->" Expr21; -- TODO function lambdas (QuantumROM.qs)
+-- ELamOp.   Expr21   ::= Bnd "=>" Expr21; -- TODO operation lambdas (SinglyControlled.qs)
 -- see git:qsharp-compiler/src/QsCompiler/TextProcessor/QsKeywords.fs
 -- Combinators (calls and array items) & Modifiers (functors and unwrap)
-EItem.    Exp20 ::= Exp20 "::" UIdent;
-EUnwrap.  Exp19 ::= Exp19 "!";
-EIndex.   Exp19 ::= Exp19 "[" Exp "]";
-ECtrl.    Exp18 ::= "Controlled" Exp18;   -- 951
-EAdj.     Exp18 ::= "Adjoint" Exp18;      -- 950
-ECall.    Exp17 ::= Exp17 "(" [Exp] ")";  -- 900
+EItem.    Expr20 ::= Expr20 "::" UIdent;
+EUnwrap.  Expr19 ::= Expr19 "!";
+EIndex.   Expr19 ::= Expr19 "[" Expr "]";
+ECtrl.    Expr18 ::= "Controlled" Expr18;   -- 951
+EAdj.     Expr18 ::= "Adjoint" Expr18;      -- 950
+ECall.    Expr17 ::= Expr17 "(" [Expr] ")";  -- 900
 -- Operators
-EPos.     Exp16 ::= "+"   Exp16;          -- 45
-ENeg.     Exp16 ::= "-"   Exp16;          -- 45
-ELNot.    Exp16 ::= "not" Exp16;          -- 45
-EBNot.    Exp16 ::= "~~~" Exp16;          -- 45
-EPow.     Exp15 ::= Exp16 "^" Exp15;
-EMul.     Exp14 ::= Exp14 "*" Exp15;
-EDiv.     Exp14 ::= Exp14 "/" Exp15;
-EMod.     Exp14 ::= Exp14 "%" Exp15;
-EAdd.     Exp13 ::= Exp13 "+" Exp14;
-ESub.     Exp13 ::= Exp13 "-" Exp14;
-EShiftR.  Exp12 ::= Exp12 ">>>" Exp13;
-EShiftL.  Exp12 ::= Exp12 SHFTL Exp13;
-EGt.      Exp11 ::= Exp11 ">"  Exp12;
-EGte.     Exp11 ::= Exp11 ">=" Exp12;
-ELt.      Exp11 ::= Exp11 LT   Exp12;
-ELte.     Exp11 ::= Exp11 LTE  Exp12;
-EEq.      Exp10 ::= Exp10 "==" Exp11;
-ENeq.     Exp10 ::= Exp10 "!=" Exp11;
-EBAnd.    Exp9  ::= Exp9 "&&&" Exp10;
-EBXor.    Exp8  ::= Exp8 "^^^" Exp9;
-EBOr.     Exp7  ::= Exp7 "|||" Exp8;
-ELAnd.    Exp6  ::= Exp6 "and" Exp7;
-ELOr.     Exp5  ::= Exp5 "or" Exp6;
-ECond.    Exp4  ::= Exp5 "?" Exp "|" Exp4;  -- 5
-ERange.   Exp3  ::= Exp3 ".." Exp4;         -- 2
-ERangeR.  Exp2  ::= Exp2 "...";
-ERangeL.  Exp1  ::= "..." Exp1;
-ERangeLR. Exp   ::= "...";                  -- 2
-EUpdate.  Exp   ::= Exp "w/" Exp LARR Exp1; -- 1
+EPos.     Expr16 ::= "+"   Expr16;          -- 45
+ENeg.     Expr16 ::= "-"   Expr16;          -- 45
+ELNot.    Expr16 ::= "not" Expr16;          -- 45
+EBNot.    Expr16 ::= "~~~" Expr16;          -- 45
+EPow.     Expr15 ::= Expr16 "^" Expr15;
+EMul.     Expr14 ::= Expr14 "*" Expr15;
+EDiv.     Expr14 ::= Expr14 "/" Expr15;
+EMod.     Expr14 ::= Expr14 "%" Expr15;
+EAdd.     Expr13 ::= Expr13 "+" Expr14;
+ESub.     Expr13 ::= Expr13 "-" Expr14;
+EShiftR.  Expr12 ::= Expr12 ">>>" Expr13;
+EShiftL.  Expr12 ::= Expr12 SHFTL Expr13;
+EGt.      Expr11 ::= Expr11 ">"  Expr12;
+EGte.     Expr11 ::= Expr11 ">=" Expr12;
+ELt.      Expr11 ::= Expr11 LT   Expr12;
+ELte.     Expr11 ::= Expr11 LTE  Expr12;
+EEq.      Expr10 ::= Expr10 "==" Expr11;
+ENeq.     Expr10 ::= Expr10 "!=" Expr11;
+EBAnd.    Expr9  ::= Expr9 "&&&" Expr10;
+EBXor.    Expr8  ::= Expr8 "^^^" Expr9;
+EBOr.     Expr7  ::= Expr7 "|||" Expr8;
+ELAnd.    Expr6  ::= Expr6 "and" Expr7;
+ELOr.     Expr5  ::= Expr5 "or" Expr6;
+ECond.    Expr4  ::= Expr5 "?" Expr "|" Expr4;  -- 5
+ERange.   Expr3  ::= Expr3 ".." Expr4;         -- 2
+ERangeR.  Expr2  ::= Expr2 "...";
+ERangeL.  Expr1  ::= "..." Expr1;
+ERangeLR. Expr   ::= "...";                  -- 2
+EUpdate.  Expr   ::= Expr "w/" Expr LARR Expr1; -- 1
 
-coercions Exp 21 ;
+coercions Expr 21 ;
 
-separator Exp ",";
+separator Expr ",";
 
 BTru . BoolL ::= "true";
 BFls . BoolL ::= "false";
