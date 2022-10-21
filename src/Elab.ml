@@ -5,6 +5,8 @@ open Map
 
 let unimplemented_error s = "Not yet implemented: " ^ s
 
+(* TODO: important note: Elaboration: well-typed and well-scoped programs *)
+
 (* what I will be using for a wildcard var when a placeholer var is needed *)
 (* TODO: add freshvars so that different strings represent different exp's *)
 let wild_var = AbsLambdaQs.MVar (AbsLambdaQs.Ident "_wild_")
@@ -88,6 +90,8 @@ and elab_calldec (calld : AbsQSharp.callDec) (env : env_t) :
   | _ ->
       failwith (unimplemented_error "Operations with type parameters (tyArg)")
 
+(* TODO: should indeed type check at this level *)
+(* not translating, but elaborating *)
 and elab_type (typ : AbsQSharp.typ) : AbsLambdaQs.typ =
   match typ with
   | TEmp ->
@@ -134,6 +138,10 @@ and elab_body (body : AbsQSharp.body) (env : env_t) : AbsLambdaQs.cmd =
       failwith (unimplemented_error "Specializations (BSpec)")
   | BScope (Scp stmts) ->
       elab_stmts stmts env
+
+and elab_stmts_funcs (stmts : AbsQSharp.stm list) (env : env_t) :
+    AbsLambdaQs.exp =
+  match stmts with _ -> failwith (unimplemented_error "elab_stmts_funcs")
 
 and elab_stmts (stmts : AbsQSharp.stm list) (env : env_t) : AbsLambdaQs.cmd =
   match stmts with
