@@ -104,7 +104,7 @@ and elab_calldec (calld : callDec) (env : env_t) : var * exp =
 
 (* TODO: should indeed type check at this level *)
 (* not translating, but elaborating *)
-and elab_type (typ : AbsQSharp.typ) : AbsLambdaQs.typ =
+and elab_type (typ : tp) : typ =
   match typ with
   | TEmp ->
       failwith (unimplemented_error "(TEmp)")
@@ -151,11 +151,10 @@ and elab_body (body : body) (env : env_t) : cmd =
   | BScope (Scp stmts) ->
       elab_stmts stmts env
 
-and elab_stmts_funcs (stmts : AbsQSharp.stm list) (env : env_t) :
-    AbsLambdaQs.exp =
+and elab_stmts_funcs (stmts : stm list) (env : env_t) : exp =
   match stmts with _ -> failwith (unimplemented_error "elab_stmts_funcs")
 
-and elab_stmts (stmts : AbsQSharp.stm list) (env : env_t) : AbsLambdaQs.cmd =
+and elab_stmts (stmts : stm list) (env : env_t) : cmd =
   match stmts with
   (* TODO: shouldn't always return empty *)
   (* namely, how to deal with the final return statement? *)
