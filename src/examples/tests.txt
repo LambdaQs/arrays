@@ -1,16 +1,16 @@
 
 
 
-This is the example of an ImpureClassicalExample
+This is Qsharp tree for the ImpureClassicalExample:
 
 
-Prog ([NDec (QUnqual (UIdent "ImpureClassicalExample"), 
-[NSOp (QQual (QIdent "Microsoft.Quantum.Intrinsic")); 
-NSCall (DPrefix ([], AEmpty), CDFun (UIdent "Tail", TAList ([TIdent "'A"]), 
-ParTpl ([ParNI (NItem (UIdent "array", TArr (TPar (TIdent "'A"))))]), TPar (TIdent "'A"), 
+Prog ([NDec (QUnqual (UIdent "ImpureClassicalExample"),
+[NSOp (QQual (QIdent "Microsoft.Quantum.Intrinsic"));
+NSCall (DPrefix ([], AEmpty), CDFun (UIdent "Tail", TAList ([TIdent "'A"]),
+ParTpl ([ParNI (NItem (UIdent "array", TArr (TPar (TIdent "'A"))))]), TPar (TIdent "'A"),
 BScope (Scp (
-  
-[SExp (ECall (EName (QUnqual (UIdent "EqualityFactB")), [EGt (ECall (EName (QUnqual (UIdent "Length")), 
-[EName (QUnqual (UIdent "array"))]), EInt (Int "0")); EBool (BTru); EStrI ("Array must be of the length at least 1")])); 
-SRet (EIndex (EName (QUnqual (UIdent "array")), ESub (ECall (EName (QUnqual (UIdent "Length")), 
+
+[SExp (ECall (EName (QUnqual (UIdent "EqualityFactB")), [EGt (ECall (EName (QUnqual (UIdent "Length")),
+[EName (QUnqual (UIdent "array"))]), EInt (Int "0")); EBool (BTru); EStrI ("Array must be of the length at least 1")]));
+SRet (EIndex (EName (QUnqual (UIdent "array")), ESub (ECall (EName (QUnqual (UIdent "Length")),
 [EName (QUnqual (UIdent "array"))]), EInt (Int "1"))))]))))])])
