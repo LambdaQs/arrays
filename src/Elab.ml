@@ -377,10 +377,11 @@ and elab_exp (exp : expr) (env : env_t) : (typ * exp) =
 and elab_ite (stmts : stm list) (env : env_t) : (typ * exp) =
   match stmts with
   | [SIf (cond, Scp stmts')] ->
-      let cond' = elab_exp cond in
-      let cmd1 = elab_stmts stmts' env in
-      (* TODO: add test for type checking branches in all of the following *)
-      EIte (TUnit, cond', ECmd (TUnit, cmd1), ETriv)
+      let (ty_c, cond') = elab_exp cond in
+        if cond' != TBool then failwith ("Expected TBool but different type present")
+        else 
+        let (ty_cmd, cmd1) = elab_stmts_fun stmts' env in
+        EIte (TUnit, cond', ECmd (TUnit, cmd1), ETriv)
   | [SEIf (cond, Scp stmts')] ->
       let cond' = elab_exp cond in
       let cmd1 = elab_stmts stmts' env in
