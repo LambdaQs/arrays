@@ -18,6 +18,7 @@ TInt.  Typ ::= "int";
 
 -- Expressions
 EVar.  Exp ::= Var;
+-- EDo.   Exp ::= "do" Exp "in" Exp; Instead, I am just using ELet for this
 ELet.  Exp ::= "let" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Exp ")";  -- let expression
 ELam.  Exp ::= "\\"  "[" Typ ";" Typ "]" "(" Var "." Exp ")";           -- lambda abstraction
 EAp.   Exp ::= "ap"  "[" Typ ";" Typ "]" "(" Exp ";" Exp ")";           -- application
@@ -29,7 +30,7 @@ ETriv. Exp ::= "<>";                                                    -- can a
 ETrue. Exp ::= "true";
 EFls.  Exp ::= "false";
 EIte.  Exp ::= "if" "[" Typ "]" "(" Exp ";" Exp ";" Exp ")";
--- ENot.  Exp ::= "not" Exp;
+ENot.  Exp ::= "not" Exp;
 -- TODO: make sure precedence is correct here
 EEq.   Exp ::= Exp "==" Exp;
 EAdd.  Exp ::= Exp "+" Exp;
