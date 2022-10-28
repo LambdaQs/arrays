@@ -15,6 +15,7 @@ TUnit. Typ ::= "unit";
 TBool. Typ ::= "bool";
 TStr.  Typ ::= "string";
 TInt.  Typ ::= "int";
+TDummy. Typ ::= "dummy";
 
 -- Expressions
 EVar.  Exp ::= Var;

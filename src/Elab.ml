@@ -31,7 +31,7 @@ type env_t = {qrefs: int Strmap.t; vars: (typ * exp) Strmap.t}
 
 (* FIXME: dummy implementation!! *)
 (* JZ: what is this doing? *)
-let typeof term env : typ = TUnit
+let typeof term env : typ = TDummy
 
 (* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
 let rec extract_ifs (stmts : stm list) : stm list * stm list =
@@ -49,10 +49,10 @@ let rec extract_ifs (stmts : stm list) : stm list * stm list =
 (* TODO: figure out what to do with TQRef here *)
 let combine_types (ty1 : typ) (ty2 : typ) : typ =
   match (ty1, ty2) with
-  | TVoid, _ ->
+  | TDummy, _ ->
       ty2
       (* FIXME: but sometimes void should take precidence like in a simple if statement? *)
-  | _, TVoid ->
+  | _, TDummy ->
       ty1
   | TQref _, TQref _ ->
       ty1
