@@ -10,7 +10,7 @@ TODO:
 1) Q# -> concrete lambda Q#
 2) concrete -> abstract lambda Q# (type inference)
 3) typechecking lambda Q#
-3’) Alias typechecking
+3') Alias typechecking
 
 elaboration and type checking should really be separate
 *)
@@ -133,42 +133,42 @@ and elab_calldec (calld : callDec) (env : env_t) : var * exp =
 (* not translating, but elaborating *)
 and elab_type (typ : tp) : typ =
   match typ with
-  | TEmp ->
+  | TpEmp ->
       failwith (unimplemented_error "(TEmp)")
-  | TPar (TIdent tyarg) ->
+  | TpPar (TIdent tyarg) ->
       failwith (unimplemented_error "(TPar)")
-  | TUDT _ ->
+  | TpUDT _ ->
       failwith (unimplemented_error "(TQNm)")
-  | TTpl typs ->
+  | TpTpl typs ->
       failwith (unimplemented_error "(TTpl)")
   (* is this right?? TParr is partial function, which sounds different than just the type of a function  *)
-  | TFun (ty1, ty2) ->
+  | TpFun (ty1, ty2) ->
       TFun (elab_type ty1, elab_type ty2)
   (* TODO: is TOp the same type as TFun? *)
-  | TOp (ty1, ty2, chars) ->
+  | TpOp (ty1, ty2, chars) ->
       failwith (unimplemented_error "(TOp)")
-  | TArr typ ->
+  | TpArr typ ->
       TArr (elab_type typ)
-  | TBInt ->
+  | TpBInt ->
       failwith (unimplemented_error "(TBInt)")
-  | TBool ->
+  | TpBool ->
       TBool
-  | TDbl ->
+  | TpDbl ->
       failwith (unimplemented_error "(TDbl)")
-  | TInt ->
+  | TpInt ->
       TInt
-  | TPli ->
+  | TpPli ->
       failwith (unimplemented_error "(TPli)")
   (* TODO: should send to Qref, but what should the key be? *)
-  | TQbit ->
+  | TpQbit ->
       failwith (unimplemented_error "(TQbit)")
-  | TRng ->
+  | TpRng ->
       failwith (unimplemented_error "(TRng)")
-  | TRes ->
+  | TpRes ->
       failwith (unimplemented_error "(TRes)")
-  | TStr ->
+  | TpStr ->
       TStr
-  | TUnit ->
+  | TpUnit ->
       TUnit
 
 and elab_body (body : body) (is_fun : bool) (env : env_t) : cmd =
@@ -301,11 +301,16 @@ and elab_stmts_op (stmts : stm list) (env : env_t) : cmd =
     match bnd with
     | BndWild ->
         let m = elab_stmts_op stmts' env in
-        let ty_e, e = elab_exp exp env in
-        CBnd (typeof exp env, typeof m env, elab_exp exp, wild_var, m)
+        let _, _ = elab_exp exp env in
+        CBnd (typeof exp env, typeof m env, snd (elab_exp exp env), wild_var, m)
     | BndName (UIdent var) ->
-        let m = elab_stmts stmts' env in
-        CBnd (typeof exp env, typeof m env, elab_exp exp, MVar (Ident var), m)
+        let m = elab_stmts_op stmts' env in
+        CBnd
+          ( typeof exp env
+          , typeof m env
+          , snd (elab_exp exp env)
+          , MVar (Ident var)
+          , m )
     | BndTplA bnds ->
         failwith (unimplemented_error "list binds") )
   (* TODO: what differentiates SLet, SMut, and SSet? *)
@@ -322,11 +327,11 @@ and elab_stmts_op (stmts : stm list) (env : env_t) : cmd =
   (* will either need to figure out what VAR to bind to as in the above or do CRet (EIte)  *)
   | SIf (exp, scope) :: stmts' ->
       let ites, stmts'' = extract_ifs stmts' in
-      let m = elab_stmts stmts'' env in
+      let m = elab_stmts_op stmts'' env in
       CBnd
         ( typeof scope env
         , typeof m env
-        , elab_ite (SIf (exp, scope) :: ites) env
+        , snd (elab_ite (SIf (exp, scope) :: ites) env)
         , wild_var
         , m )
   (* these must come after if, so wont be dealt with here *)
@@ -370,24 +375,34 @@ and elab_stmts_op (stmts : stm list) (env : env_t) : cmd =
 and elab_exp (exp : expr) (env : env_t) : typ * exp =
   match exp with
   | EName (QUnqual (UIdent x)) ->
-      EVar (MVar (Ident x))
+      (TDummy, EVar (MVar (Ident x)))
   | ECall (e1, [e2]) ->
       (* FIXME: env needs to be passed correctly here *)
-      EAp (typeof e1 empty, typeof e2 empty, elab_exp e1, elab_exp e2)
+      ( TDummy
+      , EAp
+          ( typeof e1 empty
+          , typeof e2 empty
+          , snd (elab_exp e1 env)
+          , snd (elab_exp e2 env) ) )
   | ECall (e1, [e2; e3]) ->
       (* FIXME: env needs to be passed correctly here *)
-      EAp
-        ( typeof e1 empty
-        , typeof e2 empty
-        , EAp (typeof e1 empty, typeof e2 empty, elab_exp e1, elab_exp e2)
-        , elab_exp e2 )
+      ( TDummy
+      , EAp
+          ( typeof e1 empty
+          , typeof e2 empty
+          , EAp
+              ( typeof e1 empty
+              , typeof e2 empty
+              , snd (elab_exp e1 env)
+              , snd (elab_exp e2 env) )
+          , snd (elab_exp e2 env) ) )
   | EEq (e1, e2) ->
-      EEq (elab_exp e1, elab_exp e2)
+      (TDummy, EEq (snd (elab_exp e1 env), snd (elab_exp e2 env)))
   | EAdd (e1, e2) ->
-      EAdd (elab_exp e1, elab_exp e2)
+      (TDummy, EAdd (snd (elab_exp e1 env), snd (elab_exp e2 env)))
   (* Is this correct? Why the type mismatch? *)
   | EInt (Int i) ->
-      EInt (int_of_string i)
+      (TDummy, EInt (int_of_string i))
   | _ ->
       failwith (unimplemented_error "Most expressions")
 
@@ -395,40 +410,40 @@ and elab_exp (exp : expr) (env : env_t) : typ * exp =
 (* However, elif is different from else when they appear second *)
 (* TODO: type type of an if statement may be complex, since types can be ty, ty/void, or void
    should maybe expand this *)
+(* TODO: add test for type checking branches in all cases *)
 and elab_ite (stmts : stm list) (env : env_t) : typ * exp =
   match stmts with
   | [SIf (cond, Scp stmts')] ->
-      let ty_c, cond' = elab_exp cond in
-      if cond' != TBool then
-        failwith "Expected TBool but different type present"
+      let ty_c, cond' = elab_exp cond env in
+      if ty_c != TBool then failwith "Expected Bool but different type present"
       else
         let ty_cmd, cmd1 = elab_stmts_fun stmts' env in
-        EIte (TUnit, cond', ECmd (TUnit, cmd1), ETriv)
+        (TDummy, EIte (TUnit, cond', cmd1, ETriv))
   (* TODO: make sure branches are the same *)
   | [SEIf (cond, Scp stmts')] ->
-      let cond' = elab_exp cond in
-      let cmd1 = elab_stmts stmts' env in
-      EIte (TUnit, cond', ECmd (TUnit, cmd1), ETriv)
+      let ty_c, cond' = elab_exp cond env in
+      let cmd1 = elab_stmts_op stmts' env in
+      (TDummy, EIte (TUnit, cond', ECmd (TUnit, cmd1), ETriv))
   | [SIf (cond, Scp stmts1); SElse (Scp stmts2)] ->
-      let cond' = elab_exp cond in
-      let cmd1 = elab_stmts stmts1 env in
-      let cmd2 = elab_stmts stmts2 env in
-      EIte (TUnit, cond', ECmd (TUnit, cmd1), ECmd (TUnit, cmd2))
+      let ty_c, cond' = elab_exp cond env in
+      let cmd1 = elab_stmts_op stmts1 env in
+      let cmd2 = elab_stmts_op stmts2 env in
+      (TDummy, EIte (TUnit, cond', ECmd (TUnit, cmd1), ECmd (TUnit, cmd2)))
   | [SEIf (cond, Scp stmts1); SElse (Scp stmts2)] ->
-      let cond' = elab_exp cond in
-      let cmd1 = elab_stmts stmts1 env in
-      let cmd2 = elab_stmts stmts2 env in
-      EIte (TUnit, cond', ECmd (TUnit, cmd1), ECmd (TUnit, cmd2))
+      let ty_c, cond' = elab_exp cond env in
+      let cmd1 = elab_stmts_op stmts1 env in
+      let cmd2 = elab_stmts_op stmts2 env in
+      (TDummy, EIte (TUnit, cond', ECmd (TUnit, cmd1), ECmd (TUnit, cmd2)))
   | SIf (cond, Scp stmts1) :: stmts' ->
-      let cond' = elab_exp cond in
-      let cmd1 = elab_stmts stmts1 env in
+      let ty_c, cond' = elab_exp cond env in
+      let cmd1 = elab_stmts_op stmts1 env in
       let stmts'' = elab_ite stmts' env in
-      EIte (TUnit, cond', ECmd (TUnit, cmd1), stmts'')
+      (TDummy, EIte (TUnit, cond', ECmd (TUnit, cmd1), snd stmts''))
   | SEIf (cond, Scp stmts1) :: stmts' ->
-      let cond' = elab_exp cond in
-      let cmd1 = elab_stmts stmts1 env in
+      let ty_c, cond' = elab_exp cond env in
+      let cmd1 = elab_stmts_op stmts1 env in
       let stmts'' = elab_ite stmts' env in
-      EIte (TUnit, cond', ECmd (TUnit, cmd1), stmts'')
+      (TDummy, EIte (TUnit, cond', ECmd (TUnit, cmd1), snd stmts''))
   | _ ->
       failwith "Unexpected case in ITE translation"
 
@@ -442,7 +457,7 @@ let elab_example () =
   else
     let channel = open_in Sys.argv.(1) in
     let in_prog = parse channel in
-    let out_prog = elab in_prog empty in
+    let out_prog = elab in_prog {qrefs= empty; vars= empty} in
     print_string
       ( "[Input abstract syntax]\n\n"
       ^ (fun x -> ShowQSharp.show (ShowQSharp.showDoc x)) in_prog

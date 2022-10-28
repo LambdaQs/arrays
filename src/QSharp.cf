@@ -100,23 +100,23 @@ Scp . Scope ::= "{" [Stm] "}";
 separator Stm "";
 
 -- Types
-TEmp  . Tp ::= "_";
-TPar  . Tp ::= TIdent;
-TUDT  . Tp ::= QName;
-TTpl  . Tp ::= "(" [Tp] ")";
-TFun  . Tp ::= Tp "->" Tp;
-TOp   . Tp ::= Tp "=>" Tp Chars;
-TArr  . Tp ::= Tp "[" "]";
-TBInt . Tp ::= "BigInt";
-TBool . Tp ::= "Bool"  ;
-TDbl  . Tp ::= "Double";
-TInt  . Tp ::= "Int"   ;
-TPli  . Tp ::= "Pauli" ;
-TQbit . Tp ::= "Qubit" ;
-TRng  . Tp ::= "Range" ;
-TRes  . Tp ::= "Result";
-TStr  . Tp ::= "String";
-TUnit . Tp ::= "Unit"  ;
+TpEmp  . Tp ::= "_";
+TpPar  . Tp ::= TIdent;
+TpUDT  . Tp ::= QName;
+TpTpl  . Tp ::= "(" [Tp] ")";
+TpFun  . Tp ::= Tp "->" Tp;
+TpOp   . Tp ::= Tp "=>" Tp Chars;
+TpArr  . Tp ::= Tp "[" "]";
+TpBInt . Tp ::= "BigInt";
+TpBool . Tp ::= "Bool"  ;
+TpDbl  . Tp ::= "Double";
+TpInt  . Tp ::= "Int"   ;
+TpPli  . Tp ::= "Pauli" ;
+TpQbit . Tp ::= "Qubit" ;
+TpRng  . Tp ::= "Range" ;
+TpRes  . Tp ::= "Result";
+TpStr  . Tp ::= "String";
+TpUnit . Tp ::= "Unit"  ;
 
 separator Tp ",";
 
