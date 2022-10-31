@@ -2,6 +2,7 @@ open AbsLambdaQs
 open AbsQSharp
 open Printf
 open Map
+open List
 
 let unimplemented_error s = "Not yet implemented: " ^ s
 
@@ -27,10 +28,10 @@ open Strmap
 (* the type of an environment. TODO: figure out specifically how this works *)
 (* type env_t = { vars : (typ) Strmap.t } could make this a record to be nicer *)
 (* maybe check all variables and scopes etc... on LambdaQS level, but this can still be used as the stack *)
-type env_t = {qrefs: int Strmap.t; vars: (typ * exp) Strmap.t}
+type env_t = int Strmap.t
 
 (* FIXME: dummy implementation!! *)
-(* JZ: what is this doing? *)
+(* JZ: what type is term here? Im assuming its an LQS expression *)
 let typeof term env : typ = TDummy
 
 (* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
@@ -43,6 +44,16 @@ let rec extract_ifs (stmts : stm list) : stm list * stm list =
       ([SElse scope], stmts')
   | _ ->
       ([], stmts)
+
+let rec assess_purity_scope (scp : scope) : bool =
+  match scp with
+  | Scp stmts ->
+      fold_left ( && ) true (List.map assess_purity_stmt stmts)
+
+and assess_purity_stmt (stmt : stm) : bool =
+  match stmt with _ -> failwith "TODO"
+
+and assess_purity_expr (ex : expr) : bool = match ex with _ -> failwith "TODO"
 
 (* given two LQS types, returns the combined type or returns error if there is a problem *)
 (* since things may be void, I made a helper for this *)
@@ -93,13 +104,14 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : cmd =
       let m = elab_nselmts t env in
       CBnd (typeof body env, typeof m env, body, name, m)
 
-and curry (params : param list) (rettyp : tp) (body : body) (is_fun : bool)
-    (env : env_t) : exp =
+and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) : exp
+    =
   match params with
   | [] ->
       failwith (unimplemented_error "Empty parameter list")
+      (* FIXME: what to do if the param is a qubit? *)
   | [ParNI (NItem (UIdent arg, typ))] ->
-      let pbody = elab_body body is_fun env in
+      let pbody = elab_body body env in
       ELam
         ( elab_type typ
         , elab_type rettyp
@@ -110,7 +122,7 @@ and curry (params : param list) (rettyp : tp) (body : body) (is_fun : bool)
         ( elab_type typ
         , elab_type rettyp
         , MVar (Ident arg)
-        , curry t rettyp body is_fun env )
+        , curry t rettyp body env )
   | _ ->
       failwith (unimplemented_error "Nested paramss (ParNIA)")
 
@@ -122,10 +134,10 @@ and elab_calldec (calld : callDec) (env : env_t) : var * exp =
   (* Kartik: why is TAEmpty being used here? *)
   (* JZ: its just the case where there is no type argument, the much easier case to deal with *)
   | CDFun (UIdent name, TAEmpty, ParTpl params, rettyp, body) ->
-      (MVar (Ident name), curry params rettyp body true env)
+      (MVar (Ident name), curry params rettyp body env)
   (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
   | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) ->
-      (MVar (Ident name), curry params rettyp body false env)
+      (MVar (Ident name), curry params rettyp body env)
   | _ ->
       failwith (unimplemented_error "Operations with type parameters (tyArg)")
 
@@ -171,49 +183,48 @@ and elab_type (typ : tp) : typ =
   | TpUnit ->
       TUnit
 
-and elab_body (body : body) (is_fun : bool) (env : env_t) : cmd =
+and elab_body (body : body) (env : env_t) : cmd =
   match body with
   | BSpec _ ->
       failwith (unimplemented_error "Specializations (BSpec)")
   | BScope (Scp stmts) ->
-      if is_fun then
-        let exp, ty = elab_stmts_fun stmts env in
-        CRet (exp, ty)
+      if assess_purity_scope (Scp stmts) then
+        let exp = elab_stmts_fun stmts env in
+        CRet (typeof exp env, exp)
       else elab_stmts_op stmts env
 
 (* TODO: currently, this returns an exp * typ, so is typeof useless? *)
 (* can we give a scope a type? probably, at least if there is a void type *)
-and elab_stmts_fun (stmts : stm list) (env : env_t) : typ * exp =
+and elab_stmts_fun (stmts : stm list) (env : env_t) : exp =
   match stmts with
   (* TODO: shouldn't always return empty *)
   (* namely, how to deal with the final return statement? *)
   | [] ->
-      (TUnit, ETriv)
+      ETriv
   (* TODO: in general, we'll want to use CBnd -- what var should we bind to? *)
   (* (* TODO: this is wrong since sometimes we want CGap *)
      | (SExp exp) :: [] -> CRet (elab_exp exp) *)
   (* ENSURE: This is the same as SLet when there is a wild? *)
   | SExp exp :: stmts' ->
-      let ty_e, e = elab_exp exp env in
-      let ty_m, m = elab_stmts_fun stmts' env in
-      (ty_m, ELet (ty_e, ty_m, e, wild_var, m))
+      let e = elab_exp exp env in
+      let m = elab_stmts_fun stmts' env in
+      ELet (typeof e env, typeof m env, e, wild_var, m)
   (* this one is strightforward, just return the exp *)
   | SRet exp :: _ ->
-      elab_exp exp env (* should things after return statement be ignored? *)
+      elab_exp exp
+        env (* TODO: should things after return statement be ignored? *)
   | SFail exp :: stmts' ->
       failwith (unimplemented_error "(SFail)")
   | SLet (bnd, exp) :: stmts' -> (
     match bnd with
     | BndWild ->
-        let ty_e, e = elab_exp exp env in
-        let ty_m, m = elab_stmts_fun stmts' env in
-        (ty_m, ELet (ty_e, ty_m, e, wild_var, m))
+        let e = elab_exp exp env in
+        let m = elab_stmts_fun stmts' env in
+        ELet (typeof e env, typeof m env, e, wild_var, m)
     | BndName (UIdent var) ->
-        let ty_e, e = elab_exp exp env in
-        let vars' = Strmap.add var (ty_e, e) env.vars in
-        let env' = {env with vars= vars'} in
-        let ty_m, m = elab_stmts_fun stmts' env' in
-        (ty_m, ELet (ty_e, ty_m, e, MVar (Ident var), m))
+        let e = elab_exp exp env in
+        let m = elab_stmts_fun stmts' env in
+        ELet (typeof e env, typeof m env, e, MVar (Ident var), m)
     | BndTplA bnds ->
         failwith (unimplemented_error "list binds") )
   (* TODO: what differentiates SLet, SMut, and SSet? *)
@@ -230,50 +241,37 @@ and elab_stmts_fun (stmts : stm list) (env : env_t) : typ * exp =
   (* will either need to figure out what VAR to bind to as in the above or do CRet (EIte)  *)
   | SIf (exp, scope) :: stmts' -> (
       let ites, stmts'' = extract_ifs stmts' in
-      let ty_m, m = elab_stmts_fun stmts'' env in
-      let ty_ite, ite = elab_ite (SIf (exp, scope) :: ites) env in
+      let m = elab_stmts_fun stmts'' env in
+      let ite = elab_ite (SIf (exp, scope) :: ites) env in
       match stmts'' with
       | [] ->
-          (ty_ite, ite)
+          ite
       | _ ->
-          (combine_types ty_ite ty_m, ELet (ty_ite, ty_m, ite, wild_var, m)) )
-  (* these must come after if, so wont be dealt with here *)
-  | SEIf (exp, scope) :: stmts' ->
-      failwith "Elif statement does not occur after an If statement"
-  | SElse scope :: stmts' ->
-      failwith "Else statement does not occur after an If statement"
-  | SFor (bnd, exp, scope) :: stmts' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | SWhile (exp, scope) :: stmts' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  (* TODO: can we assume that when SUntil appears, SRep must have come before? *)
-  | SRep scope :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | SUntil exp :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | SUntilF (exp, scope) :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | SWithin scope :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | SApply scope :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | SUse (QBnd (bnd, qbitInit)) :: stms' -> (
-    match qbitInit with
-    | QInitS -> (
-      match bnd with
-      | BndWild ->
-          failwith "Must bind Qubit to a variable"
-          (* TODO: should this be an error? *)
-      | BndName (UIdent var) ->
-          failwith "TODO"
-      | BndTplA bnds ->
-          failwith "mismatch in number of binds" )
-    | QInitA num ->
-        failwith (unimplemented_error "(QInitA)")
-    | QInitT qs ->
-        failwith (unimplemented_error "(QInitT)") )
-  | SUseS (qbitBnd, scope) :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+          ELet (typeof ite env, typeof m env, ite, wild_var, m)
+      (* these must come after if, so wont be dealt with here *)
+      | SEIf (exp, scope) :: stmts' ->
+          failwith "Elif statement does not occur after an If statement"
+      | SElse scope :: stmts' ->
+          failwith "Else statement does not occur after an If statement"
+      | SFor (bnd, exp, scope) :: stmts' ->
+          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      | SWhile (exp, scope) :: stmts' ->
+          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      (* TODO: can we assume that when SUntil appears, SRep must have come before? *)
+      | SRep scope :: stms' ->
+          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      | SUntil exp :: stms' ->
+          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      | SUntilF (exp, scope) :: stms' ->
+          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      | SWithin scope :: stms' ->
+          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      | SApply scope :: stms' ->
+          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      | SUse (QBnd (bnd, qbitInit)) :: stms' ->
+          failwith "Cannot create a Qubit inside a function"
+      | SUseS (qbitBnd, scope) :: stms' ->
+          failwith "Cannot create a Qubit inside a function" )
 
 and elab_stmts_op (stmts : stm list) (env : env_t) : cmd =
   match stmts with
@@ -287,13 +285,13 @@ and elab_stmts_op (stmts : stm list) (env : env_t) : cmd =
   (* I beleive that this is actually the correct translation: *)
   | SExp exp :: stmts' ->
       let m = elab_stmts_op stmts' env in
-      let ty_e, e = elab_exp exp env in
+      let e = elab_exp exp env in
       (* FIXME: typeof seems bad here *)
-      CBnd (ty_e, typeof m env, e, wild_var, m)
+      CBnd (typeof e env, typeof m env, e, wild_var, m)
   (* this one is strightforward, just return the exp *)
   | SRet exp :: _ ->
-      let ty_e, e = elab_exp exp env in
-      CRet (ty_e, e)
+      let e = elab_exp exp env in
+      CRet (typeof e env, e)
       (* should things after return statement be ignored? *)
   | SFail exp :: stmts' ->
       failwith (unimplemented_error "(SFail)")
@@ -301,16 +299,12 @@ and elab_stmts_op (stmts : stm list) (env : env_t) : cmd =
     match bnd with
     | BndWild ->
         let m = elab_stmts_op stmts' env in
-        let _, _ = elab_exp exp env in
-        CBnd (typeof exp env, typeof m env, snd (elab_exp exp env), wild_var, m)
+        let e = elab_exp exp env in
+        CBnd (typeof e env, typeof m env, e, wild_var, m)
     | BndName (UIdent var) ->
         let m = elab_stmts_op stmts' env in
         CBnd
-          ( typeof exp env
-          , typeof m env
-          , snd (elab_exp exp env)
-          , MVar (Ident var)
-          , m )
+          (typeof exp env, typeof m env, elab_exp exp env, MVar (Ident var), m)
     | BndTplA bnds ->
         failwith (unimplemented_error "list binds") )
   (* TODO: what differentiates SLet, SMut, and SSet? *)
@@ -328,12 +322,8 @@ and elab_stmts_op (stmts : stm list) (env : env_t) : cmd =
   | SIf (exp, scope) :: stmts' ->
       let ites, stmts'' = extract_ifs stmts' in
       let m = elab_stmts_op stmts'' env in
-      CBnd
-        ( typeof scope env
-        , typeof m env
-        , snd (elab_ite (SIf (exp, scope) :: ites) env)
-        , wild_var
-        , m )
+      let ite = elab_ite (SIf (exp, scope) :: ites) env in
+      CBnd (typeof ite env, typeof m env, ite, wild_var, m)
   (* these must come after if, so wont be dealt with here *)
   | SEIf (exp, scope) :: stmts' ->
       failwith "Elif statement does not occur after an If statement"
@@ -372,37 +362,28 @@ and elab_stmts_op (stmts : stm list) (env : env_t) : cmd =
   | SUseS (qbitBnd, scope) :: stms' ->
       failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
 
-and elab_exp (exp : expr) (env : env_t) : typ * exp =
+and elab_exp (exp : expr) (env : env_t) : exp =
   match exp with
   | EName (QUnqual (UIdent x)) ->
-      (TDummy, EVar (MVar (Ident x)))
+      EVar (MVar (Ident x))
   | ECall (e1, [e2]) ->
       (* FIXME: env needs to be passed correctly here *)
-      ( TDummy
-      , EAp
-          ( typeof e1 empty
-          , typeof e2 empty
-          , snd (elab_exp e1 env)
-          , snd (elab_exp e2 env) ) )
+      EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
   | ECall (e1, [e2; e3]) ->
       (* FIXME: env needs to be passed correctly here *)
-      ( TDummy
-      , EAp
-          ( typeof e1 empty
-          , typeof e2 empty
-          , EAp
-              ( typeof e1 empty
-              , typeof e2 empty
-              , snd (elab_exp e1 env)
-              , snd (elab_exp e2 env) )
-          , snd (elab_exp e2 env) ) )
+      EAp
+        ( TDummy
+          (* its too annoying to access this here and will probably be TDummy anyways *)
+        , typeof e3 env
+        , EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
+        , elab_exp e3 env )
   | EEq (e1, e2) ->
-      (TDummy, EEq (snd (elab_exp e1 env), snd (elab_exp e2 env)))
+      EEq (elab_exp e1 env, elab_exp e2 env)
   | EAdd (e1, e2) ->
-      (TDummy, EAdd (snd (elab_exp e1 env), snd (elab_exp e2 env)))
+      EAdd (elab_exp e1 env, elab_exp e2 env)
   (* Is this correct? Why the type mismatch? *)
   | EInt (Int i) ->
-      (TDummy, EInt (int_of_string i))
+      EInt (int_of_string i)
   | _ ->
       failwith (unimplemented_error "Most expressions")
 
@@ -411,14 +392,12 @@ and elab_exp (exp : expr) (env : env_t) : typ * exp =
 (* TODO: type type of an if statement may be complex, since types can be ty, ty/void, or void
    should maybe expand this *)
 (* TODO: add test for type checking branches in all cases *)
-and elab_ite (stmts : stm list) (env : env_t) : typ * exp =
+and elab_ite (stmts : stm list) (env : env_t) : exp =
   match stmts with
   | [SIf (cond, Scp stmts')] ->
-      let ty_c, cond' = elab_exp cond env in
-      if ty_c != TBool then failwith "Expected Bool but different type present"
-      else
-        let ty_cmd, cmd1 = elab_stmts_fun stmts' env in
-        (TDummy, EIte (TUnit, cond', cmd1, ETriv))
+      let cond' = elab_exp cond env in
+      let ty_cmd, cmd1 = elab_stmts_fun stmts' env in
+      EIte (TUnit, cond', cmd1, ETriv)
   (* TODO: make sure branches are the same *)
   | [SEIf (cond, Scp stmts')] ->
       let ty_c, cond' = elab_exp cond env in
