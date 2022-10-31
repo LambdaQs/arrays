@@ -32,6 +32,7 @@ type env_t = int Strmap.t
 
 (* FIXME: dummy implementation!! *)
 (* JZ: what type is term here? Im assuming its an LQS expression *)
+(* Kartik: that's right! We are calling `typeof` after elaborating Q# expressions *)
 let typeof term env : typ = TDummy
 
 (* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
@@ -129,17 +130,16 @@ and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) : exp
 (* what is going on here? Why these specific return values? *)
 and elab_calldec (calld : callDec) (env : env_t) : var * exp =
   match calld with
-  (* make sure only pure things happen inside functions, although qubits can still be passed *)
-  (* TODO: should fix this based on the above *)
-  (* Kartik: why is TAEmpty being used here? *)
-  (* JZ: its just the case where there is no type argument, the much easier case to deal with *)
+  (* TODO: make sure only pure things happen inside functions, although qubits can still be passed *)
   | CDFun (UIdent name, TAEmpty, ParTpl params, rettyp, body) ->
       (MVar (Ident name), curry params rettyp body env)
   (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
   | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) ->
       (MVar (Ident name), curry params rettyp body env)
   | _ ->
-      failwith (unimplemented_error "Operations with type parameters (tyArg)")
+      failwith
+        (unimplemented_error
+           "Operations with type parameters (tyArg != TAEmpty)" )
 
 (* TODO: should indeed type check at this level *)
 (* not translating, but elaborating *)
