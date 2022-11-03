@@ -4,6 +4,7 @@ entrypoints Exp;
 MVar. Var ::= Ident; -- variables
 MUni. Uni ::= Ident; -- unitaries
 MKey. Key ::= Ident; -- qubit symbols/unique keys
+-- MKVar. Keyvar ::= Ident;
 
 -- Types
 TQref. Typ ::= "qref" "<" Key ">";          -- qubit reference

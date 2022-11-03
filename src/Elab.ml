@@ -28,7 +28,7 @@ open Strmap
 (* the type of an environment. TODO: figure out specifically how this works *)
 (* type env_t = { vars : (typ) Strmap.t } could make this a record to be nicer *)
 (* maybe check all variables and scopes etc... on LambdaQS level, but this can still be used as the stack *)
-type env_t = int Strmap.t
+type env_t = {vars: typ Strmap.t; qrefs: int Strmap.t}
 
 (* FIXME: dummy implementation!! *)
 (* JZ: what type is term here? Im assuming its an LQS expression *)
@@ -173,6 +173,7 @@ and elab_type (typ : tp) : typ =
       failwith (unimplemented_error "(TPli)")
   (* TODO: should send to Qref, but what should the key be? *)
   | TpQbit ->
+      (* given polymorphic key *)
       failwith (unimplemented_error "(TQbit)")
   | TpRng ->
       failwith (unimplemented_error "(TRng)")
@@ -223,6 +224,7 @@ and elab_stmts_fun (stmts : stm list) (env : env_t) : exp =
         ELet (typeof e env, typeof m env, e, wild_var, m)
     | BndName (UIdent var) ->
         let e = elab_exp exp env in
+        (* TODO: in anycase *)
         let m = elab_stmts_fun stmts' env in
         ELet (typeof e env, typeof m env, e, MVar (Ident var), m)
     | BndTplA bnds ->
@@ -247,31 +249,31 @@ and elab_stmts_fun (stmts : stm list) (env : env_t) : exp =
       | [] ->
           ite
       | _ ->
-          ELet (typeof ite env, typeof m env, ite, wild_var, m)
-      (* these must come after if, so wont be dealt with here *)
-      | SEIf (exp, scope) :: stmts' ->
-          failwith "Elif statement does not occur after an If statement"
-      | SElse scope :: stmts' ->
-          failwith "Else statement does not occur after an If statement"
-      | SFor (bnd, exp, scope) :: stmts' ->
-          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-      | SWhile (exp, scope) :: stmts' ->
-          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-      (* TODO: can we assume that when SUntil appears, SRep must have come before? *)
-      | SRep scope :: stms' ->
-          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-      | SUntil exp :: stms' ->
-          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-      | SUntilF (exp, scope) :: stms' ->
-          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-      | SWithin scope :: stms' ->
-          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-      | SApply scope :: stms' ->
-          failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-      | SUse (QBnd (bnd, qbitInit)) :: stms' ->
-          failwith "Cannot create a Qubit inside a function"
-      | SUseS (qbitBnd, scope) :: stms' ->
-          failwith "Cannot create a Qubit inside a function" )
+          ELet (typeof ite env, typeof m env, ite, wild_var, m) )
+  (* these must come after if, so wont be dealt with here *)
+  | SEIf (exp, scope) :: stmts' ->
+      failwith "Elif statement does not occur after an If statement"
+  | SElse scope :: stmts' ->
+      failwith "Else statement does not occur after an If statement"
+  | SFor (bnd, exp, scope) :: stmts' ->
+      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | SWhile (exp, scope) :: stmts' ->
+      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  (* TODO: can we assume that when SUntil appears, SRep must have come before? *)
+  | SRep scope :: stms' ->
+      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | SUntil exp :: stms' ->
+      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | SUntilF (exp, scope) :: stms' ->
+      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | SWithin scope :: stms' ->
+      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | SApply scope :: stms' ->
+      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+  | SUse (QBnd (bnd, qbitInit)) :: stms' ->
+      failwith "Cannot create a Qubit inside a function"
+  | SUseS (qbitBnd, scope) :: stms' ->
+      failwith "Cannot create a Qubit inside a function"
 
 and elab_stmts_op (stmts : stm list) (env : env_t) : cmd =
   match stmts with
@@ -396,33 +398,37 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
   match stmts with
   | [SIf (cond, Scp stmts')] ->
       let cond' = elab_exp cond env in
-      let ty_cmd, cmd1 = elab_stmts_fun stmts' env in
-      EIte (TUnit, cond', cmd1, ETriv)
+      let e1 = elab_stmts_fun stmts' env in
+      EIte (typeof e1 env, cond', e1, ETriv)
   (* TODO: make sure branches are the same *)
   | [SEIf (cond, Scp stmts')] ->
-      let ty_c, cond' = elab_exp cond env in
-      let cmd1 = elab_stmts_op stmts' env in
-      (TDummy, EIte (TUnit, cond', ECmd (TUnit, cmd1), ETriv))
+      let cond' = elab_exp cond env in
+      let e1 = elab_stmts_fun stmts' env in
+      EIte (typeof e1 env, cond', e1, ETriv)
   | [SIf (cond, Scp stmts1); SElse (Scp stmts2)] ->
-      let ty_c, cond' = elab_exp cond env in
-      let cmd1 = elab_stmts_op stmts1 env in
-      let cmd2 = elab_stmts_op stmts2 env in
-      (TDummy, EIte (TUnit, cond', ECmd (TUnit, cmd1), ECmd (TUnit, cmd2)))
+      let cond' = elab_exp cond env in
+      let e1 = elab_stmts_fun stmts1 env in
+      let e2 = elab_stmts_fun stmts2 env in
+      (* FIXME: should we ensure e1 and e2 have same type here? *)
+      EIte (typeof e1 env, cond', e1, e2)
   | [SEIf (cond, Scp stmts1); SElse (Scp stmts2)] ->
-      let ty_c, cond' = elab_exp cond env in
-      let cmd1 = elab_stmts_op stmts1 env in
-      let cmd2 = elab_stmts_op stmts2 env in
-      (TDummy, EIte (TUnit, cond', ECmd (TUnit, cmd1), ECmd (TUnit, cmd2)))
+      let cond' = elab_exp cond env in
+      let e1 = elab_stmts_fun stmts1 env in
+      let e2 = elab_stmts_fun stmts2 env in
+      (* FIXME: should we ensure e1 and e2 have same type here? *)
+      EIte (typeof e1 env, cond', e1, e2)
   | SIf (cond, Scp stmts1) :: stmts' ->
-      let ty_c, cond' = elab_exp cond env in
-      let cmd1 = elab_stmts_op stmts1 env in
+      let cond' = elab_exp cond env in
+      let e1 = elab_stmts_fun stmts1 env in
       let stmts'' = elab_ite stmts' env in
-      (TDummy, EIte (TUnit, cond', ECmd (TUnit, cmd1), snd stmts''))
+      (* FIXME: should we ensure e1 and e2 have same type here? *)
+      EIte (typeof e1 env, cond', e1, stmts'')
   | SEIf (cond, Scp stmts1) :: stmts' ->
-      let ty_c, cond' = elab_exp cond env in
-      let cmd1 = elab_stmts_op stmts1 env in
+      let cond' = elab_exp cond env in
+      let e1 = elab_stmts_fun stmts1 env in
       let stmts'' = elab_ite stmts' env in
-      (TDummy, EIte (TUnit, cond', ECmd (TUnit, cmd1), snd stmts''))
+      (* FIXME: should we ensure e1 and e2 have same type here? *)
+      EIte (typeof e1 env, cond', e1, stmts'')
   | _ ->
       failwith "Unexpected case in ITE translation"
 
