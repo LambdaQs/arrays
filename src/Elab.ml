@@ -28,7 +28,7 @@ open Strmap
 (* the type of an environment. TODO: figure out specifically how this works *)
 (* type env_t = { vars : (typ) Strmap.t } could make this a record to be nicer *)
 (* maybe check all variables and scopes etc... on LambdaQS level, but this can still be used as the stack *)
-type env_t = {vars: typ Strmap.t; qrefs: int Strmap.t}
+type env_t = {qrefs: int Strmap.t; vars: typ Strmap.t}
 
 (* FIXME: dummy implementation!! *)
 (* JZ: what type is term here? Im assuming its an LQS expression *)
@@ -71,8 +71,8 @@ let combine_types (ty1 : typ) (ty2 : typ) : typ =
   | _ ->
       if ty1 == ty2 then ty1 else failwith "Branches have different types"
 
-(* should also take in signature (stack data struc to keep track of Qubits) and
-   context (to keep track of variables and types) *)
+(* elab takes in the the program and the environment composed of the
+   signature and context *)
 let rec elab (prog : doc) (env : env_t) : cmd =
   match prog with
   | Prog [ns] ->
@@ -101,9 +101,11 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : cmd =
       failwith (unimplemented_error "Type declarations (NSTy)")
   (* TODO: do something with declaration prefix *)
   | NSCall (_, calld) :: t ->
-      let name, body = elab_calldec calld env in
+      let x, body = elab_calldec calld env in
+      (* FIXME: add x in env' vars *)
+      let env' = {qrefs= env.qrefs; vars= env.vars} in
       let m = elab_nselmts t env in
-      CBnd (typeof body env, typeof m env, body, name, m)
+      CBnd (typeof body env, typeof m env', body, x, m)
 
 and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) : exp
     =

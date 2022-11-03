@@ -1,29 +1,35 @@
 entrypoints Exp;
 
 -- Metavariables
-MVar. Var ::= Ident; -- variables
-MUni. Uni ::= Ident; -- unitaries
-MKey. Key ::= Ident; -- qubit symbols/unique keys
--- MKVar. Keyvar ::= Ident;
+MVar.  Var  ::= Ident; -- variables
+MTVar. TVar ::= Ident; -- type variables
+MUni.  Uni  ::= Ident; -- unitaries
+MKey.  Key  ::= Ident; -- qubit symbols/unique keys
+MKVar. KVar ::= Ident; -- key variables
 
 -- Types
-TQref. Typ ::= "qref" "<" Key ">";          -- qubit reference
-TFun.  Typ ::= "fun"  "(" Typ ";" Typ ")";  -- function
-TCmd.  Typ ::= "cmd"  "(" Typ ")";          -- command
-TProd. Typ ::= "prod" "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
-TArr.  Typ ::= Typ "[" "]";
-TUnit. Typ ::= "unit";
-TBool. Typ ::= "bool";
-TStr.  Typ ::= "string";
-TInt.  Typ ::= "int";
+TTVar.  Typ ::= TVar;
+TQref.  Typ ::= "qref" "<" Key ">";          -- qubit reference
+TQAll.  Typ ::= "qall" "<" KVar ">";         -- abstract qubit ref
+TFun.   Typ ::= "fun"  "(" Typ ";" Typ ")";  -- function
+TAll.   Typ ::= "all"  "(" TVar "." Typ ")"; -- polymorphic function
+TCmd.   Typ ::= "cmd"  "(" Typ ")";          -- command
+TProd.  Typ ::= "prod" "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
+TArr.   Typ ::= Typ "[" "]";
+TUnit.  Typ ::= "unit";
+TBool.  Typ ::= "bool";
+TStr.   Typ ::= "string";
+TInt.   Typ ::= "int";
 TDummy. Typ ::= "dummy";
 
 -- Expressions
 EVar.  Exp ::= Var;
 -- EDo.   Exp ::= "do" Exp "in" Exp; Instead, I am just using ELet for this
 ELet.  Exp ::= "let" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Exp ")";  -- let expression
-ELam.  Exp ::= "\\"  "[" Typ ";" Typ "]" "(" Var "." Exp ")";           -- lambda abstraction
-EAp.   Exp ::= "ap"  "[" Typ ";" Typ "]" "(" Exp ";" Exp ")";           -- application
+ELam.  Exp ::= "λ"  "[" Typ  ";" Typ "]" "(" Var  "." Exp ")";          -- lambda abstraction
+EAp.   Exp ::= "ap" "[" Typ  ";" Typ "]" "(" Exp  ";" Exp ")";          -- application
+ETLam. Exp ::= "Λ"  "[" TVar "." Typ "]" "(" TVar "." Exp ")";          -- type abstraction
+ETAp.  Exp ::= "Ap" "[" TVar "." Typ "]" "(" Exp  ";" Exp ")";          -- type application
 ECmd.  Exp ::= "cmd" "[" Typ "]" Cmd;                                   -- encapsulation
 EQloc. Exp ::= "&" Key;                                                 -- qubit locations TODO: still needed?
 EProj. Exp ::= "proj" "<" Integer ">" "[" Typ ";" Typ "]" "(" Exp ")";  -- currently just 1 or 2 as these are pairs
