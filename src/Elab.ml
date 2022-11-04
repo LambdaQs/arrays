@@ -28,7 +28,10 @@ open Strmap
 (* the type of an environment. TODO: figure out specifically how this works *)
 (* type env_t = { vars : (typ) Strmap.t } could make this a record to be nicer *)
 (* maybe check all variables and scopes etc... on LambdaQS level, but this can still be used as the stack *)
-type env_t = {qrefs: int Strmap.t; vars: typ Strmap.t}
+(*FIXME: does int here refer to int or AbsQSharp.int, it seems like its the latter which seems bad,
+  although I am unsure how to refer to the normal int type *)
+type env_t =
+  {qrefs: int Strmap.t; qalls: int Strmap.t; vars: (typ * exp) Strmap.t}
 
 (* FIXME: dummy implementation!! *)
 (* JZ: what type is term here? Im assuming its an LQS expression *)
@@ -55,6 +58,17 @@ and assess_purity_stmt (stmt : stm) : bool =
   match stmt with _ -> failwith "TODO"
 
 and assess_purity_expr (ex : expr) : bool = match ex with _ -> failwith "TODO"
+
+(*
+let add_qubit_cxt (var : string) (env : env_t) (qref : bool) : env_t =
+    if qref
+    then
+        let str_i = string_of_int(cardinal(env.qrefs)) in
+
+
+    let vars' = Strmap.add var  env.vars in
+    let env' = {env with vars = vars'} in
+*)
 
 (* given two LQS types, returns the combined type or returns error if there is a problem *)
 (* since things may be void, I made a helper for this *)
@@ -100,32 +114,55 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : cmd =
   | NSTy _ :: _ ->
       failwith (unimplemented_error "Type declarations (NSTy)")
   (* TODO: do something with declaration prefix *)
-  | NSCall (_, calld) :: t ->
+  | NSCall (_, calld) :: t -> (
       let x, body = elab_calldec calld env in
-      (* FIXME: add x in env' vars *)
-      let env' = {qrefs= env.qrefs; vars= env.vars} in
-      let m = elab_nselmts t env in
-      CBnd (typeof body env, typeof m env', body, x, m)
+      let ty_body = typeof body env in
+      match x with
+      | MVar (Ident var_name) ->
+          let vars' = Strmap.add var_name (ty_body, EVar x) env.vars in
+          let env' = {env with vars= vars'} in
+          let m = elab_nselmts t env in
+          CBnd (typeof body env, typeof m env', body, x, m) )
+
+(* preps the param, to be used in curry *)
+and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
+  match argtyp with
+  | TpQbit ->
+      (*FIXME: should we also be adding to vars here? *)
+      let i = string_of_int (cardinal env.qalls) in
+      let qalls' = Strmap.add arg (Int i) env.qalls in
+      let env' = {env with qalls= qalls'} in
+      let qtype = TQAll (MKVar (Ident i)) in
+      (qtype, env')
+  | _ ->
+      (*FIXME: this seems slightly wrong, but we need to somehow connect argtype to arg when elabing body *)
+      let argtyp' = elab_type argtyp in
+      (* need to elab here so we can add to context *)
+      let vars' = Strmap.add arg (argtyp', EVar (MVar (Ident arg))) env.vars in
+      let env' = {env with vars= vars'} in
+      (argtyp', env')
 
 and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) : exp
     =
   match params with
   | [] ->
       failwith (unimplemented_error "Empty parameter list")
-      (* FIXME: what to do if the param is a qubit? *)
+      (*FIXME: what to do if the param is a qubit? *)
   | [ParNI (NItem (UIdent arg, typ))] ->
-      let pbody = elab_body body env in
+      (* if typ is TQbit, have to do smth entirely different so this gets a bit annoying *)
+      (*FIXME: if type is Qubit[n], I dont know what to do here/in prep_param (JZ) *)
+      let typ', env' = prep_param arg typ env in
+      let pbody = elab_body body env' in
       ELam
-        ( elab_type typ
+        ( typ'
         , elab_type rettyp
         , MVar (Ident arg)
-        , ECmd (typeof pbody env, pbody) )
+        , ECmd (typeof pbody env', pbody) )
+      (*FIXME: pbody is a cmd here, so typeof must account for this *)
   | ParNI (NItem (UIdent arg, typ)) :: t ->
-      ELam
-        ( elab_type typ
-        , elab_type rettyp
-        , MVar (Ident arg)
-        , curry t rettyp body env )
+      (*FIXME: this branch is wrong!!!! if f a b = c, then the first curry step has rettype b -> c, not c*)
+      let typ', env' = prep_param arg typ env in
+      ELam (typ', elab_type rettyp, MVar (Ident arg), curry t rettyp body env')
   | _ ->
       failwith (unimplemented_error "Nested paramss (ParNIA)")
 
@@ -153,14 +190,17 @@ and elab_type (typ : tp) : typ =
       failwith (unimplemented_error "(TPar)")
   | TpUDT _ ->
       failwith (unimplemented_error "(TQNm)")
-  | TpTpl typs ->
-      failwith (unimplemented_error "(TTpl)")
-  (* is this right?? TParr is partial function, which sounds different than just the type of a function  *)
+  | TpTpl typs -> (
+    match typs with
+    | [t1; t2] ->
+        TProd (elab_type t1, elab_type t2)
+    | _ ->
+        failwith "only 2-ples are accepted" )
   | TpFun (ty1, ty2) ->
       TFun (elab_type ty1, elab_type ty2)
   (* TODO: is TOp the same type as TFun? *)
   | TpOp (ty1, ty2, chars) ->
-      failwith (unimplemented_error "(TOp)")
+      TFun (elab_type ty1, elab_type ty2) (*TODO: what to do with chars here? *)
   | TpArr typ ->
       TArr (elab_type typ)
   | TpBInt ->
@@ -172,7 +212,7 @@ and elab_type (typ : tp) : typ =
   | TpInt ->
       TInt
   | TpPli ->
-      failwith (unimplemented_error "(TPli)")
+      TPauli
   (* TODO: should send to Qref, but what should the key be? *)
   | TpQbit ->
       (* given polymorphic key *)
@@ -444,7 +484,7 @@ let elab_example () =
   else
     let channel = open_in Sys.argv.(1) in
     let in_prog = parse channel in
-    let out_prog = elab in_prog {qrefs= empty; vars= empty} in
+    let out_prog = elab in_prog {qrefs= empty; qalls= empty; vars= empty} in
     print_string
       ( "[Input abstract syntax]\n\n"
       ^ (fun x -> ShowQSharp.show (ShowQSharp.showDoc x)) in_prog

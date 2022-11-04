@@ -16,6 +16,7 @@ TAll.   Typ ::= "all"  "(" TVar "." Typ ")"; -- polymorphic function
 TCmd.   Typ ::= "cmd"  "(" Typ ")";          -- command
 TProd.  Typ ::= "prod" "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
 TArr.   Typ ::= Typ "[" "]";
+TPauli. Typ ::= "pauli";
 TUnit.  Typ ::= "unit";
 TBool.  Typ ::= "bool";
 TStr.   Typ ::= "string";
