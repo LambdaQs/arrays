@@ -174,7 +174,7 @@ separator QbitInit ",";
 EEmp.     Expr21 ::= "_";
 EName.    Expr21 ::= QName;
 ENameT.   Expr21 ::= QName "<" [Tp] ">";
-EInt.     Expr21 ::= Int;
+EInt.     Expr21 ::= Integ;
 EBInt.    Expr21 ::= BigInt;
 EDbl.     Expr21 ::= Doubl;
 EStr.     Expr21 ::= String;
@@ -246,7 +246,7 @@ token QIdent letter (letter | digit | '_')* ('.' letter (letter | digit | '_')*)
 token UIdent ('_')? letter (letter | digit | '_')*;
 
 -- TODO also define and include binary
-token Int     digit+ | ('0' ('x'|'X') (digit | ["abcdef"] | ["ABCDEF"])+) | ('0'["01234567"]*);
+token Integ   digit+ | ('0' ('x'|'X') (digit | ["abcdef"] | ["ABCDEF"])+) | ('0'["01234567"]*);
 token BigInt (digit+ | ('0' ('x'|'X') (digit | ["abcdef"] | ["ABCDEF"])+) | ('0'["01234567"]*))  ('l'|'L');
 
 token Doubl (digit* '.' digit+ (('e'|'E') '-'? digit+)?) | digit+ ('e'|'E') '-'? digit+;

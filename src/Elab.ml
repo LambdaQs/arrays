@@ -28,8 +28,6 @@ open Strmap
 (* the type of an environment. TODO: figure out specifically how this works *)
 (* type env_t = { vars : (typ) Strmap.t } could make this a record to be nicer *)
 (* maybe check all variables and scopes etc... on LambdaQS level, but this can still be used as the stack *)
-(*FIXME: does int here refer to int or AbsQSharp.int, it seems like its the latter which seems bad,
-  although I am unsure how to refer to the normal int type *)
 type env_t =
   {qrefs: int Strmap.t; qalls: int Strmap.t; vars: (typ * exp) Strmap.t}
 
@@ -129,10 +127,10 @@ and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
   match argtyp with
   | TpQbit ->
       (*FIXME: should we also be adding to vars here? *)
-      let i = string_of_int (cardinal env.qalls) in
-      let qalls' = Strmap.add arg (Int i) env.qalls in
+      let i = cardinal env.qalls in
+      let qalls' = Strmap.add arg i env.qalls in
       let env' = {env with qalls= qalls'} in
-      let qtype = TQAll (MKVar (Ident i)) in
+      let qtype = TQAll (MKVar (Ident (string_of_int i))) in
       (qtype, env')
   | _ ->
       (*FIXME: this seems slightly wrong, but we need to somehow connect argtype to arg when elabing body *)
@@ -426,7 +424,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
   | EAdd (e1, e2) ->
       EAdd (elab_exp e1 env, elab_exp e2 env)
   (* Is this correct? Why the type mismatch? *)
-  | EInt (Int i) ->
+  | EInt (Integ i) ->
       EInt (int_of_string i)
   | _ ->
       failwith (unimplemented_error "Most expressions")
