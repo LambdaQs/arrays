@@ -51,7 +51,7 @@ internal EVarT. Exp ::= "(" Var ":" Typ ")";
 -- Commands
 CRet.   Cmd ::= "ret" "[" Typ "]" Exp;                                  -- return
 CBnd.   Cmd ::= "bnd" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Cmd ")"; -- sequence
-CNew.   Cmd ::= "new" Var "in" Cmd;                                     -- new qubit reference
+CNew.   Cmd ::= "new" "[" Typ "]" "(" Var "." Cmd ")";                  -- new qubit reference
 CGap.   Cmd ::= Uni "(" Exp ")";                                        -- unitary gate application
 CDiag.  Cmd ::= "D" "(" Uni "," Uni ";" Exp "," Exp ")";                -- diagonal gate application
 CMeas.  Cmd ::= "meas" "(" Exp ")";                                     -- measurement
