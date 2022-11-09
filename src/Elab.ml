@@ -396,20 +396,39 @@ and elab_exp (exp : expr) (env : env_t) : exp =
         , EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
         , elab_exp e3 env )
   | ECall (e1, [e2; e3; e4]) ->
-      failwith "HERE!!"
+      EAp
+        ( TDummy
+          (* its too annoying to access this here and will probably be TDummy anyways *)
+        , typeof e3 env
+        , EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
+        , elab_exp e3 env )
   | EEq (e1, e2) ->
       EEq (elab_exp e1 env, elab_exp e2 env)
   | EAdd (e1, e2) ->
       EAdd (elab_exp e1 env, elab_exp e2 env)
-  (* Is this correct? Why the type mismatch? *)
+  | EArr es ->
+      EArr (List.map (fun e -> elab_exp e env) es)
+  | ETp [e] ->
+      elab_exp e env
+  | ETp [e1; e2] ->
+      EPair (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
+  | EStr str ->
+      EStr str
+  | EStrI str ->
+      EStr str
+  | EEmp ->
+      EWld
   | EBool BTru ->
       ETrue
   | EBool BFls ->
       EFls
+  (* Is this correct? Why the type mismatch? *)
   | EInt (Integ i) ->
       EInt (int_of_string i)
-  | _ ->
-      failwith (unimplemented_error "expressions")
+  | x ->
+      failwith
+        (unimplemented_error
+           ("expressions: " ^ ShowQSharp.show (ShowQSharp.showExpr x)) )
 
 (* note that if and elif are basically the same when they come first, elif just had stuff before it *)
 (* However, elif is different from else when they appear second *)

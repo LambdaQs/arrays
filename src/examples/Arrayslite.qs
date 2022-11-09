@@ -15,16 +15,16 @@ namespace Microsoft.Quantum.Arrays {
     }
 
 
-    function Tail<'A> (array : 'A[]) : 'A {
-        EqualityFactB(Length(array) > 0, true, $"Array must be of the length at least 1");
-        return array[Length(array) - 1];
-    }
+    // function Tail<'A> (array : 'A[]) : 'A {
+    //     EqualityFactB(Length(array) == 0, true, 1);
+    //     return array[Length(array) - 1];
+    // }
 
 
-    function Head<'A> (array : 'A[]) : 'A {
-        EqualityFactB(Length(array) > 0, true, $"Array must be of the length at least 1");
-        return array[0];
-    }
+    // function Head<'A> (array : 'A[]) : 'A {
+    //     EqualityFactB(Length(array) == 0, true, 1);
+    //     return array[0];
+    // }
 
 
     function HeadAndRest<'A>(array : 'A[]) : ('A, 'A[]) {
@@ -37,9 +37,9 @@ namespace Microsoft.Quantum.Arrays {
     }
 
 
-    function ConstantArray<'T> (length : Int, value : 'T) : 'T[] {
-        return [value, size = length];
-    }
+    // function ConstantArray<'T> (length : Int, value : 'T) : 'T[] {
+    //     return [value, size = length];
+    // }
 
 
 }

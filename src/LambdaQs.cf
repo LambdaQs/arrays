@@ -23,8 +23,10 @@ TStr.   Typ ::= "string";
 TInt.   Typ ::= "int";
 TDummy. Typ ::= "dummy";
 
+--FIXME: reorder these to be closer to Qsharp grammar
 -- Expressions
 EVar.  Exp ::= Var;
+EWld.  Exp ::= "_";
 ELet.  Exp ::= "let" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Exp ")";  -- let expression
 ELam.  Exp ::= "λ"  "[" Typ  ";" Typ "]" "(" Var  "." Exp ")";          -- lambda abstraction
 EAp.   Exp ::= "ap" "[" Typ  ";" Typ "]" "(" Exp  ";" Exp ")";          -- application
@@ -42,10 +44,15 @@ ENot.  Exp ::= "not" Exp;
 -- TODO: make sure precedence is correct here
 EEq.   Exp ::= Exp "==" Exp;
 EAdd.  Exp ::= Exp "+" Exp;
+EArr.  Exp ::= "[" [Exp] "]";  --FIXME: this should probably be reimplemented to be better, also add types
 EInt.  Exp ::= Integer;
+EStr.  Exp ::= String;
 -- ERef.  Exp ::= Exp "requires" Ref "ensures" Ref; -- TODO
 
 internal EVarT. Exp ::= "(" Var ":" Typ ")";
+
+separator Exp ",";
+
 
 -- Commands
 CRet.   Cmd ::= "ret" "[" Typ "]" Exp;                                  -- return
