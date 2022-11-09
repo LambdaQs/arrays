@@ -345,20 +345,20 @@ and elab_stmts (stmts : stm list) (env : env_t) : (exp, cmd) Either.t =
   | SElse scope :: stmts' ->
       failwith "Else statement does not occur after an If statement"
   | SFor (bnd, exp, scope) :: stmts' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      failwith (unimplemented_error "statement SFor")
   | SWhile (exp, scope) :: stmts' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      failwith (unimplemented_error "statement SWhile")
   (* TODO: can we assume that when SUntil appears, SRep must have come before? *)
   | SRep scope :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      failwith (unimplemented_error "statement SRep")
   | SUntil exp :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      failwith (unimplemented_error "statement SUntil")
   | SUntilF (exp, scope) :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      failwith (unimplemented_error "statement SUntilF")
   | SWithin scope :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      failwith (unimplemented_error "statement SWithin")
   | SApply scope :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      failwith (unimplemented_error "statement SApply")
   | SUse (QBnd (bnd, qbitInit)) :: stms' -> (
     match qbitInit with
     | QInitS -> (
@@ -375,7 +375,7 @@ and elab_stmts (stmts : stm list) (env : env_t) : (exp, cmd) Either.t =
     | QInitT qs ->
         failwith (unimplemented_error "(QInitT)") )
   | SUseS (qbitBnd, scope) :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
+      failwith (unimplemented_error "statement SUseS")
 
 (* Note: should not worry too much about calling quantum things exp's, quantum things will be
    encapsulated accordingly in elab_exp *)
