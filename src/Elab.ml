@@ -104,7 +104,7 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : cmd =
   | NSTy _ :: _ ->
       failwith (unimplemented_error "Type declarations (NSTy)")
   (* TODO: do something with declaration prefix *)
-  | NSCall (_, calld) :: t -> (
+  | NSClbl (_, calld) :: t -> (
       let f, ty_body, body = elab_calldec calld env in
       match f with
       | MVar (Ident func_name) ->
@@ -514,13 +514,13 @@ let elab_example () =
   else
     let channel = open_in Sys.argv.(1) in
     let in_prog = parse channel in
-    let out_prog =
-      elab in_prog {qrefs= empty; qalls= empty; vars= empty; newtys= empty}
-    in
     print_string
       ( "[Input abstract syntax]\n\n"
       ^ (fun x -> ShowQSharp.show (ShowQSharp.showDoc x)) in_prog
       ^ "\n\n" ) ;
+    let out_prog =
+      elab in_prog {qrefs= empty; qalls= empty; vars= empty; newtys= empty}
+    in
     print_string
       ( "[Output abstract syntax]\n\n"
       ^ (fun x -> ShowLambdaQs.show (ShowLambdaQs.showCmd x)) out_prog

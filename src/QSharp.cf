@@ -16,7 +16,7 @@ QQual.   QName ::= QIdent;
 NSOp   . NSElmnt ::= "open" QName ";";
 NSOpAs . NSElmnt ::= "open" QName "as" QName ";";
 NSTy   . NSElmnt ::= DeclPrefix "newtype" UIdent "=" UType ";" ;
-NSCall . NSElmnt ::= DeclPrefix CallDec;
+NSClbl . NSElmnt ::= DeclPrefix CallDec;
 
 DPrefix. DeclPrefix ::= [Attr] Access;
 
