@@ -16,7 +16,7 @@ TAll.   Typ ::= "all"  "(" TVar "." Typ ")"; -- polymorphic function
 TCmd.   Typ ::= "cmd"  "(" Typ ")";          -- command
 TProd.  Typ ::= "prod" "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
 TArr.   Typ ::= Typ "[" "]";
-TPauli. Typ ::= "pauli";
+TPauli. Typ ::= "pauli"; --TODO: change this to sum type
 TUnit.  Typ ::= "unit";
 TBool.  Typ ::= "bool";
 TStr.   Typ ::= "string";
@@ -25,7 +25,6 @@ TDummy. Typ ::= "dummy";
 
 -- Expressions
 EVar.  Exp ::= Var;
--- EDo.   Exp ::= "do" Exp "in" Exp; Instead, I am just using ELet for this
 ELet.  Exp ::= "let" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Exp ")";  -- let expression
 ELam.  Exp ::= "λ"  "[" Typ  ";" Typ "]" "(" Var  "." Exp ")";          -- lambda abstraction
 EAp.   Exp ::= "ap" "[" Typ  ";" Typ "]" "(" Exp  ";" Exp ")";          -- application

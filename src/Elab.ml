@@ -3,6 +3,7 @@ open AbsQSharp
 open Printf
 open Map
 open List
+open Either
 
 let unimplemented_error s = "Not yet implemented: " ^ s
 
@@ -25,9 +26,7 @@ let wild_var = MVar (Ident "_wild_")
 module Strmap = Map.Make (String)
 open Strmap
 
-(* the type of an environment. TODO: figure out specifically how this works *)
-(* type env_t = { vars : (typ) Strmap.t } could make this a record to be nicer *)
-(* maybe check all variables and scopes etc... on LambdaQS level, but this can still be used as the stack *)
+(*FIXME: we may also need the var -> typ map, including exp here may be useless *)
 type env_t =
   {qrefs: int Strmap.t; qalls: int Strmap.t; vars: (typ * exp) Strmap.t}
 
@@ -47,6 +46,7 @@ let rec extract_ifs (stmts : stm list) : stm list * stm list =
   | _ ->
       ([], stmts)
 
+(* note that a scope is classical iff all its stmts are pure *)
 let rec assess_purity_scope (scp : scope) : bool =
   match scp with
   | Scp stmts ->
@@ -57,31 +57,20 @@ and assess_purity_stmt (stmt : stm) : bool =
 
 and assess_purity_expr (ex : expr) : bool = match ex with _ -> failwith "TODO"
 
-(*
-let add_qubit_cxt (var : string) (env : env_t) (qref : bool) : env_t =
-    if qref
-    then
-        let str_i = string_of_int(cardinal(env.qrefs)) in
-
-
-    let vars' = Strmap.add var  env.vars in
-    let env' = {env with vars = vars'} in
-*)
-
 (* given two LQS types, returns the combined type or returns error if there is a problem *)
 (* since things may be void, I made a helper for this *)
 (* TODO: figure out what to do with TQRef here *)
-let combine_types (ty1 : typ) (ty2 : typ) : typ =
-  match (ty1, ty2) with
-  | TDummy, _ ->
-      ty2
-      (* FIXME: but sometimes void should take precidence like in a simple if statement? *)
-  | _, TDummy ->
-      ty1
-  | TQref _, TQref _ ->
-      ty1
-  | _ ->
-      if ty1 == ty2 then ty1 else failwith "Branches have different types"
+(* let combine_types (ty1 : typ) (ty2 : typ) : typ =
+   match (ty1, ty2) with
+   | TDummy, _ ->
+       ty2
+       (* FIXME: but sometimes void should take precidence like in a simple if statement? *)
+   | _, TDummy ->
+       ty1
+   | TQref _, TQref _ ->
+       ty1
+   | _ ->
+       if ty1 == ty2 then ty1 else failwith "Branches have different types" *)
 
 (* elab takes in the the program and the environment composed of the
    signature and context *)
@@ -113,14 +102,16 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : cmd =
       failwith (unimplemented_error "Type declarations (NSTy)")
   (* TODO: do something with declaration prefix *)
   | NSCall (_, calld) :: t -> (
-      let x, body = elab_calldec calld env in
-      let ty_body = typeof body env in
-      match x with
-      | MVar (Ident var_name) ->
-          let vars' = Strmap.add var_name (ty_body, EVar x) env.vars in
+      let f, ty_body, body = elab_calldec calld env in
+      match f with
+      | MVar (Ident func_name) ->
+          let vars' = Strmap.add func_name (ty_body, EVar f) env.vars in
+          (* f is a function here *)
           let env' = {env with vars= vars'} in
           let m = elab_nselmts t env in
-          CBnd (typeof body env, typeof m env', body, x, m) )
+          (*FIXME: do we want the final type here? or the type of the entire function f *)
+          CBnd (ty_body, typeof m env', body, f, m) )
+(*FIXME: pretty sure m will always typecheck to unit?*)
 
 (* preps the param, to be used in curry *)
 and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
@@ -128,58 +119,64 @@ and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
   | TpQbit ->
       (*FIXME: should we also be adding to vars here? *)
       let i = cardinal env.qalls in
+      (*FIXME: should probably generate i a different way, but fine for now *)
       let qalls' = Strmap.add arg i env.qalls in
       let env' = {env with qalls= qalls'} in
       let qtype = TQAll (MKVar (Ident (string_of_int i))) in
       (qtype, env')
+      (*FIXME: if type is Qubit[n], should be more like first branch?
+          Not really sure what to do here. *)
   | _ ->
-      (*FIXME: this seems slightly wrong, but we need to somehow connect argtype to arg when elabing body *)
+      (*FIXME: this seems slightly wrong, but we need to somehow connect
+               argtype to arg when elabing body and I believe this does that *)
       let argtyp' = elab_type argtyp in
-      (* need to elab here so we can add to context *)
       let vars' = Strmap.add arg (argtyp', EVar (MVar (Ident arg))) env.vars in
       let env' = {env with vars= vars'} in
       (argtyp', env')
 
-and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) : exp
-    =
+(* I am having curry return a type here since its pretty easy to get the type of the curried
+   function, possibly easier than to use typeof? *)
+and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) :
+    typ * exp =
   match params with
   | [] ->
       failwith (unimplemented_error "Empty parameter list")
-      (*FIXME: what to do if the param is a qubit? *)
   | [ParNI (NItem (UIdent arg, typ))] ->
       (* if typ is TQbit, have to do smth entirely different so this gets a bit annoying *)
-      (*FIXME: if type is Qubit[n], I dont know what to do here/in prep_param (JZ) *)
       let typ', env' = prep_param arg typ env in
-      let pbody = elab_body body env' in
-      ELam
-        ( typ'
-        , elab_type rettyp
-        , MVar (Ident arg)
-        , ECmd (typeof pbody env', pbody) )
-      (*FIXME: pbody is a cmd here, so typeof must account for this *)
+      let ty_body, pbody = elab_body body env' in
+      let rettyp' = elab_type rettyp in
+      (*TODO: should we be checking ty_body against rettyp'? *)
+      ( TFun (typ', rettyp')
+      , ELam
+          ( typ'
+          , rettyp' (*TODO: per above rettyp' could also be ty_body? *)
+          , MVar (Ident arg)
+          , ECmd (ty_body, pbody) ) )
   | ParNI (NItem (UIdent arg, typ)) :: t ->
-      (*FIXME: this branch is wrong!!!! if f a b = c, then the first curry step has rettype b -> c, not c*)
       let typ', env' = prep_param arg typ env in
-      ELam (typ', elab_type rettyp, MVar (Ident arg), curry t rettyp body env')
+      let cur_ty, cur = curry t rettyp body env' in
+      (TFun (typ', cur_ty), ELam (typ', cur_ty, MVar (Ident arg), cur))
   | _ ->
       failwith (unimplemented_error "Nested paramss (ParNIA)")
 
 (* what is going on here? Why these specific return values? *)
-and elab_calldec (calld : callDec) (env : env_t) : var * exp =
+and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
   match calld with
   (* TODO: make sure only pure things happen inside functions, although qubits can still be passed *)
   | CDFun (UIdent name, TAEmpty, ParTpl params, rettyp, body) ->
-      (MVar (Ident name), curry params rettyp body env)
+      let rettyp', body' = curry params rettyp body env in
+      (MVar (Ident name), rettyp', body')
+  (*FIXME: add mechanism here to ensure that functions stay pure *)
   (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
   | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) ->
-      (MVar (Ident name), curry params rettyp body env)
+      let rettyp', body' = curry params rettyp body env in
+      (MVar (Ident name), rettyp', body')
   | _ ->
       failwith
         (unimplemented_error
            "Operations with type parameters (tyArg != TAEmpty)" )
 
-(* TODO: should indeed type check at this level *)
-(* not translating, but elaborating *)
 and elab_type (typ : tp) : typ =
   match typ with
   | TpEmp ->
@@ -224,49 +221,75 @@ and elab_type (typ : tp) : typ =
   | TpUnit ->
       TUnit
 
-and elab_body (body : body) (env : env_t) : cmd =
+and elab_body (body : body) (env : env_t) : typ * cmd =
   match body with
   | BSpec _ ->
       failwith (unimplemented_error "Specializations (BSpec)")
-  | BScope (Scp stmts) ->
-      if assess_purity_scope (Scp stmts) then
-        let exp = elab_stmts_fun stmts env in
-        CRet (typeof exp env, exp)
-      else elab_stmts_op stmts env
+  | BScope (Scp stmts) -> (
+      let scope = elab_stmts stmts env in
+      match scope with
+      | Left exp ->
+          (typeof exp env, CRet (typeof exp env, exp))
+          (*FIXME: is s_ty the type for both parts here? *)
+      | Right cmd ->
+          (typeof cmd env, cmd) )
+(*FIXME: is it ok that cmd is a command not an exp here? *)
 
-(* TODO: currently, this returns an exp * typ, so is typeof useless? *)
-(* can we give a scope a type? probably, at least if there is a void type *)
-and elab_stmts_fun (stmts : stm list) (env : env_t) : exp =
+(*
+    (* might want to have typ outputted by elab_stmts and elab_exp, in which case this works better here: *)
+     let (s_ty, scope) = elab_stmts stmts env in
+      match scope with
+      | Left exp -> (s_ty, CRet (s_ty, exp)) (*FIXME: is s_ty the type for both parts here? *)
+      | Right cmd -> (s_ty, cmd) *)
+
+(* (* not sure if this is the correct approach, so commenting out for now     *)
+   if assess_purity_scope (Scp stmts) then
+     let exp = elab_stmts_fun stmts env in
+     CRet (typeof exp env, exp)
+   else elab_stmts_op stmts env *)
+
+and elab_stmts (stmts : stm list) (env : env_t) : (exp, cmd) Either.t =
   match stmts with
   (* TODO: shouldn't always return empty *)
   (* namely, how to deal with the final return statement? *)
   | [] ->
-      ETriv
-  (* TODO: in general, we'll want to use CBnd -- what var should we bind to? *)
-  (* (* TODO: this is wrong since sometimes we want CGap *)
-     | (SExp exp) :: [] -> CRet (elab_exp exp) *)
-  (* ENSURE: This is the same as SLet when there is a wild? *)
-  | SExp exp :: stmts' ->
+      Left ETriv
+  (*FIXME: JZ: I am still pretty confused about this case, so someone should check this *)
+  | SExp exp :: stmts' -> (
       let e = elab_exp exp env in
-      let m = elab_stmts_fun stmts' env in
-      ELet (typeof e env, typeof m env, e, wild_var, m)
+      let s = elab_stmts stmts' env in
+      match s with
+      | Left e_s ->
+          Left (ELet (typeof e env, typeof e_s env, e, wild_var, e_s))
+      | Right c_s ->
+          Right (CBnd (typeof e env, typeof c_s env, e, wild_var, c_s)) )
   (* this one is strightforward, just return the exp *)
   | SRet exp :: _ ->
-      elab_exp exp
-        env (* TODO: should things after return statement be ignored? *)
+      Left (elab_exp exp env)
+      (* TODO: should things after return statement be ignored? *)
   | SFail exp :: stmts' ->
       failwith (unimplemented_error "(SFail)")
   | SLet (bnd, exp) :: stmts' -> (
     match bnd with
-    | BndWild ->
+    | BndWild -> (
         let e = elab_exp exp env in
-        let m = elab_stmts_fun stmts' env in
-        ELet (typeof e env, typeof m env, e, wild_var, m)
-    | BndName (UIdent var) ->
+        let s = elab_stmts stmts' env in
+        match s with
+        | Left e_s ->
+            Left (ELet (typeof e env, typeof e_s env, e, wild_var, e_s))
+        | Right c_s ->
+            Right (CBnd (typeof e env, typeof c_s env, e, wild_var, c_s)) )
+    | BndName (UIdent var) -> (
         let e = elab_exp exp env in
-        (* TODO: in anycase *)
-        let m = elab_stmts_fun stmts' env in
-        ELet (typeof e env, typeof m env, e, MVar (Ident var), m)
+        let ty_e = typeof e env in
+        let vars' = Strmap.add var (ty_e, e) env.vars in
+        let env' = {env with vars= vars'} in
+        let s = elab_stmts stmts' env' in
+        match s with
+        | Left e_s ->
+            Left (ELet (ty_e, typeof e_s env, e, MVar (Ident var), e_s))
+        | Right c_s ->
+            Right (CBnd (ty_e, typeof c_s env, e, MVar (Ident var), c_s)) )
     | BndTplA bnds ->
         failwith (unimplemented_error "list binds") )
   (* TODO: what differentiates SLet, SMut, and SSet? *)
@@ -283,89 +306,23 @@ and elab_stmts_fun (stmts : stm list) (env : env_t) : exp =
   (* will either need to figure out what VAR to bind to as in the above or do CRet (EIte)  *)
   | SIf (exp, scope) :: stmts' -> (
       let ites, stmts'' = extract_ifs stmts' in
-      let m = elab_stmts_fun stmts'' env in
+      (*FIXME: if let bindings occur in if statements, then we should pass an updated env' here *)
+      (*however, it is impossible to check this without evaluating the conditions, so things might break!! *)
+      let s = elab_stmts stmts'' env in
       let ite = elab_ite (SIf (exp, scope) :: ites) env in
       match stmts'' with
       | [] ->
-          ite
-      | _ ->
-          ELet (typeof ite env, typeof m env, ite, wild_var, m) )
-  (* these must come after if, so wont be dealt with here *)
-  | SEIf (exp, scope) :: stmts' ->
-      failwith "Elif statement does not occur after an If statement"
-  | SElse scope :: stmts' ->
-      failwith "Else statement does not occur after an If statement"
-  | SFor (bnd, exp, scope) :: stmts' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | SWhile (exp, scope) :: stmts' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  (* TODO: can we assume that when SUntil appears, SRep must have come before? *)
-  | SRep scope :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | SUntil exp :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | SUntilF (exp, scope) :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | SWithin scope :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | SApply scope :: stms' ->
-      failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
-  | SUse (QBnd (bnd, qbitInit)) :: stms' ->
-      failwith "Cannot create a Qubit inside a function"
-  | SUseS (qbitBnd, scope) :: stms' ->
-      failwith "Cannot create a Qubit inside a function"
-
-and elab_stmts_op (stmts : stm list) (env : env_t) : cmd =
-  match stmts with
-  (* TODO: shouldn't always return empty *)
-  (* namely, how to deal with the final return statement? *)
-  | [] ->
-      CRet (TUnit, ETriv)
-  (* TODO: in general, we'll want to use CBnd -- what var should we bind to? *)
-  (* (* TODO: this is wrong since sometimes we want CGap *)
-     | (SExp exp) :: [] -> CRet (elab_exp exp) *)
-  (* I beleive that this is actually the correct translation: *)
-  | SExp exp :: stmts' ->
-      let m = elab_stmts_op stmts' env in
-      let e = elab_exp exp env in
-      (* FIXME: typeof seems bad here *)
-      CBnd (typeof e env, typeof m env, e, wild_var, m)
-  (* this one is strightforward, just return the exp *)
-  | SRet exp :: _ ->
-      let e = elab_exp exp env in
-      CRet (typeof e env, e)
-      (* should things after return statement be ignored? *)
-  | SFail exp :: stmts' ->
-      failwith (unimplemented_error "(SFail)")
-  | SLet (bnd, exp) :: stmts' -> (
-    match bnd with
-    | BndWild ->
-        let m = elab_stmts_op stmts' env in
-        let e = elab_exp exp env in
-        CBnd (typeof e env, typeof m env, e, wild_var, m)
-    | BndName (UIdent var) ->
-        let m = elab_stmts_op stmts' env in
-        CBnd
-          (typeof exp env, typeof m env, elab_exp exp env, MVar (Ident var), m)
-    | BndTplA bnds ->
-        failwith (unimplemented_error "list binds") )
-  (* TODO: what differentiates SLet, SMut, and SSet? *)
-  | SMut (bnd, exp) :: stmts' ->
-      failwith (unimplemented_error "SMut")
-  | SSet (bnd, exp) :: stmts' ->
-      failwith (unimplemented_error "SSet")
-  | SSetOp (UIdent arg, sOp, exp) :: stmts' ->
-      failwith (unimplemented_error "SSetOp")
-  | SSetW (UIdent arg, exp1, larr, exp2) :: stmts' ->
-      failwith (unimplemented_error "SSetW")
-  (* TODO: look up how these are done in other languages since the implementation here is probably similar *)
-  (* I have some ideas for how this would work, but gets translated to exp anyways and not cmd *)
-  (* will either need to figure out what VAR to bind to as in the above or do CRet (EIte)  *)
-  | SIf (exp, scope) :: stmts' ->
-      let ites, stmts'' = extract_ifs stmts' in
-      let m = elab_stmts_op stmts'' env in
-      let ite = elab_ite (SIf (exp, scope) :: ites) env in
-      CBnd (typeof ite env, typeof m env, ite, wild_var, m)
+          (*FIXME: should check if ite is pure or not and encapsulate accordingly *)
+          (* or should ite always be an exp. this seems a bit nicer, we don't need to put it in a cmd just because,
+             the returns within will be encapsulated *)
+          Left ite
+      | _ -> (
+        match s with
+        | Left e_s ->
+            Left (ELet (typeof ite env, typeof e_s env, ite, wild_var, e_s))
+        | Right c_s ->
+            Right (CBnd (typeof ite env, typeof c_s env, ite, wild_var, c_s)) )
+      )
   (* these must come after if, so wont be dealt with here *)
   | SEIf (exp, scope) :: stmts' ->
       failwith "Elif statement does not occur after an If statement"
@@ -404,10 +361,13 @@ and elab_stmts_op (stmts : stm list) (env : env_t) : cmd =
   | SUseS (qbitBnd, scope) :: stms' ->
       failwith (unimplemented_error "Most statements (SFail, SLet, ...)")
 
+(* Note: should not worry too much about calling quantum things exp's, quantum things will be
+   encapsulated accordingly in elab_exp *)
 and elab_exp (exp : expr) (env : env_t) : exp =
   match exp with
   | EName (QUnqual (UIdent x)) ->
       EVar (MVar (Ident x))
+      (*FIXME: if ECall is a quantum op, things must be done differently here *)
   | ECall (e1, [e2]) ->
       (* FIXME: env needs to be passed correctly here *)
       EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
@@ -436,39 +396,87 @@ and elab_exp (exp : expr) (env : env_t) : exp =
 (* TODO: add test for type checking branches in all cases *)
 and elab_ite (stmts : stm list) (env : env_t) : exp =
   match stmts with
-  | [SIf (cond, Scp stmts')] ->
+  | [SIf (cond, Scp stmts')] -> (
       let cond' = elab_exp cond env in
-      let e1 = elab_stmts_fun stmts' env in
-      EIte (typeof e1 env, cond', e1, ETriv)
-  (* TODO: make sure branches are the same *)
-  | [SEIf (cond, Scp stmts')] ->
+      let s1 = elab_stmts stmts' env in
+      match s1 with
+      | Left e1 ->
+          EIte (typeof e1 env, cond', e1, ETriv)
+      | Right m1 ->
+          EIte (typeof m1 env, cond', ECmd (typeof m1 env, m1), ETriv) )
+  (* note that the first two branched are the same *)
+  | [SEIf (cond, Scp stmts')] -> (
       let cond' = elab_exp cond env in
-      let e1 = elab_stmts_fun stmts' env in
-      EIte (typeof e1 env, cond', e1, ETriv)
-  | [SIf (cond, Scp stmts1); SElse (Scp stmts2)] ->
+      let s1 = elab_stmts stmts' env in
+      match s1 with
+      | Left e1 ->
+          EIte (typeof e1 env, cond', e1, ETriv)
+      | Right m1 ->
+          EIte (typeof m1 env, cond', ECmd (typeof m1 env, m1), ETriv) )
+  | [SIf (cond, Scp stmts1); SElse (Scp stmts2)] -> (
       let cond' = elab_exp cond env in
-      let e1 = elab_stmts_fun stmts1 env in
-      let e2 = elab_stmts_fun stmts2 env in
-      (* FIXME: should we ensure e1 and e2 have same type here? *)
-      EIte (typeof e1 env, cond', e1, e2)
-  | [SEIf (cond, Scp stmts1); SElse (Scp stmts2)] ->
+      let s1 = elab_stmts stmts1 env in
+      let s2 = elab_stmts stmts2 env in
+      match (s1, s2) with
+      | Left e1, Left e2 ->
+          if typeof e1 env == typeof e2 env then
+            EIte (typeof e1 env, cond', e1, e2)
+          else failwith "branches cannot be different types"
+      | Right m1, Right m2 ->
+          if typeof m1 env == typeof m2 env then
+            EIte
+              ( typeof m1 env
+              , cond'
+              , ECmd (typeof m1 env, m1)
+              , ECmd (typeof m2 env, m2) )
+          else failwith "branches cannot be different types"
+      | _ ->
+          failwith "branches cannot be different purities" )
+  | [SEIf (cond, Scp stmts1); SElse (Scp stmts2)] -> (
       let cond' = elab_exp cond env in
-      let e1 = elab_stmts_fun stmts1 env in
-      let e2 = elab_stmts_fun stmts2 env in
-      (* FIXME: should we ensure e1 and e2 have same type here? *)
-      EIte (typeof e1 env, cond', e1, e2)
-  | SIf (cond, Scp stmts1) :: stmts' ->
+      let s1 = elab_stmts stmts1 env in
+      let s2 = elab_stmts stmts2 env in
+      match (s1, s2) with
+      | Left e1, Left e2 ->
+          if typeof e1 env == typeof e2 env then
+            EIte (typeof e1 env, cond', e1, e2)
+          else failwith "branches cannot be different types"
+      | Right m1, Right m2 ->
+          if typeof m1 env == typeof m2 env then
+            EIte
+              ( typeof m1 env
+              , cond'
+              , ECmd (typeof m1 env, m1)
+              , ECmd (typeof m2 env, m2) )
+          else failwith "branches cannot be different types"
+      | _ ->
+          failwith "branches cannot be different purities" )
+  | SIf (cond, Scp stmts1) :: stmts' -> (
       let cond' = elab_exp cond env in
-      let e1 = elab_stmts_fun stmts1 env in
+      let s1 = elab_stmts stmts1 env in
       let stmts'' = elab_ite stmts' env in
-      (* FIXME: should we ensure e1 and e2 have same type here? *)
-      EIte (typeof e1 env, cond', e1, stmts'')
-  | SEIf (cond, Scp stmts1) :: stmts' ->
+      match s1 with
+      | Left e1 ->
+          if typeof e1 env == typeof stmts'' env then
+            EIte (typeof e1 env, cond', e1, stmts'')
+          else failwith "branches cannot be different types"
+      | Right m1 ->
+          if typeof m1 env == typeof stmts'' env then
+            EIte (typeof m1 env, cond', ECmd (typeof m1 env, m1), stmts'')
+          else failwith "branches cannot be different types" )
+  | SEIf (cond, Scp stmts1) :: stmts' -> (
       let cond' = elab_exp cond env in
-      let e1 = elab_stmts_fun stmts1 env in
+      let s1 = elab_stmts stmts1 env in
       let stmts'' = elab_ite stmts' env in
-      (* FIXME: should we ensure e1 and e2 have same type here? *)
-      EIte (typeof e1 env, cond', e1, stmts'')
+      match s1 with
+      | Left e1 ->
+          if typeof e1 env == typeof stmts'' env then
+            EIte (typeof e1 env, cond', e1, stmts'')
+          else failwith "branches cannot be different types"
+      | Right m1 ->
+          if typeof m1 env == typeof stmts'' env then
+            EIte (typeof m1 env, cond', ECmd (typeof m1 env, m1), stmts'')
+          else failwith "branches cannot be different types" )
   | _ ->
       failwith "Unexpected case in ITE translation"
 
