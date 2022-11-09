@@ -17,7 +17,7 @@ TODO:
 elaboration and type checking should really be separate
 *)
 
-(* TODO: important note: Elaboration: well-typed and well-scoped programs *)
+(* NOTE: Elaboration: well-typed and well-scoped programs *)
 
 (* what I will be using for a wildcard var when a placeholer var is needed *)
 (* TODO: add freshvars so that different strings represent different exp's *)
@@ -413,7 +413,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
 
 (* note that if and elif are basically the same when they come first, elif just had stuff before it *)
 (* However, elif is different from else when they appear second *)
-(* TODO: type type of an if statement may be complex, since types can be ty, ty/void, or void
+(* TODO: type of an if statement may be complex, since types can be ty, ty/void, or void
    should maybe expand this *)
 (* TODO: add test for type checking branches in all cases *)
 and elab_ite (stmts : stm list) (env : env_t) : exp =
