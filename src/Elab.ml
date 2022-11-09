@@ -183,9 +183,7 @@ and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
       let rettyp', body' = curry params rettyp body env' in
       (MVar (Ident name), rettyp', body')
   | _ ->
-      failwith
-        (unimplemented_error
-           "Operations with type parameters (tyArg != TAEmpty)" )
+      failwith (unimplemented_error "Callables with multiple type parameters")
 
 and elab_type (typ : tp) (env : env_t) : typ =
   match typ with
@@ -411,7 +409,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
   | EInt (Integ i) ->
       EInt (int_of_string i)
   | _ ->
-      failwith (unimplemented_error "Most expressions")
+      failwith (unimplemented_error "expressions")
 
 (* note that if and elif are basically the same when they come first, elif just had stuff before it *)
 (* However, elif is different from else when they appear second *)
