@@ -13,7 +13,8 @@ namespace IfsExample {
             return a + 7;
         }
         else {
-            return a + a + 10;
+            let v = true;
+            return v;
         }
 
     }

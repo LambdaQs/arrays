@@ -28,7 +28,10 @@ open Strmap
 
 (*FIXME: we may also need the var -> typ map, including exp here may be useless *)
 type env_t =
-  {qrefs: int Strmap.t; qalls: int Strmap.t; vars: (typ * exp) Strmap.t}
+  { qrefs: int Strmap.t
+  ; qalls: int Strmap.t
+  ; vars: (typ * exp) Strmap.t
+  ; newtys: typ Strmap.t }
 
 (* FIXME: dummy implementation!! *)
 (* JZ: what type is term here? Im assuming its an LQS expression *)
@@ -129,7 +132,7 @@ and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
   | _ ->
       (*FIXME: this seems slightly wrong, but we need to somehow connect
                argtype to arg when elabing body and I believe this does that *)
-      let argtyp' = elab_type argtyp in
+      let argtyp' = elab_type argtyp env in
       let vars' = Strmap.add arg (argtyp', EVar (MVar (Ident arg))) env.vars in
       let env' = {env with vars= vars'} in
       (argtyp', env')
@@ -145,7 +148,7 @@ and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) :
       (* if typ is TQbit, have to do smth entirely different so this gets a bit annoying *)
       let typ', env' = prep_param arg typ env in
       let ty_body, pbody = elab_body body env' in
-      let rettyp' = elab_type rettyp in
+      let rettyp' = elab_type rettyp env in
       (*TODO: should we be checking ty_body against rettyp'? *)
       ( TFun (typ', rettyp')
       , ELam
@@ -172,32 +175,47 @@ and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
   | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) ->
       let rettyp', body' = curry params rettyp body env in
       (MVar (Ident name), rettyp', body')
+  | CDFun (UIdent name, TAList [TIdent new_ty], ParTpl params, rettyp, body) ->
+      let newtys' =
+        Strmap.add new_ty (TTVar (MTVar (Ident new_ty))) env.newtys
+      in
+      let env' = {env with newtys= newtys'} in
+      let rettyp', body' = curry params rettyp body env' in
+      (MVar (Ident name), rettyp', body')
   | _ ->
       failwith
         (unimplemented_error
            "Operations with type parameters (tyArg != TAEmpty)" )
 
-and elab_type (typ : tp) : typ =
+and elab_type (typ : tp) (env : env_t) : typ =
   match typ with
   | TpEmp ->
       failwith (unimplemented_error "(TEmp)")
-  | TpPar (TIdent tyarg) ->
-      failwith (unimplemented_error "(TPar)")
+  | TpPar (TIdent tyarg) -> (
+    match Strmap.find_opt tyarg env.newtys with
+    | None ->
+        failwith "Undefined type variable"
+    | Some t ->
+        t )
   | TpUDT _ ->
       failwith (unimplemented_error "(TQNm)")
   | TpTpl typs -> (
     match typs with
+    (*FIXME: this first case comes up some times, incorrectly I think, but just translating t seems to work well enough *)
+    | [t] ->
+        elab_type t env
     | [t1; t2] ->
-        TProd (elab_type t1, elab_type t2)
+        TProd (elab_type t1 env, elab_type t2 env)
     | _ ->
         failwith "only 2-ples are accepted" )
   | TpFun (ty1, ty2) ->
-      TFun (elab_type ty1, elab_type ty2)
+      TFun (elab_type ty1 env, elab_type ty2 env)
   (* TODO: is TOp the same type as TFun? *)
   | TpOp (ty1, ty2, chars) ->
-      TFun (elab_type ty1, elab_type ty2) (*TODO: what to do with chars here? *)
+      TFun (elab_type ty1 env, elab_type ty2 env)
+      (*TODO: what to do with chars here? *)
   | TpArr typ ->
-      TArr (elab_type typ)
+      TArr (elab_type typ env)
   | TpBInt ->
       failwith (unimplemented_error "(TBInt)")
   | TpBool ->
@@ -379,11 +397,17 @@ and elab_exp (exp : expr) (env : env_t) : exp =
         , typeof e3 env
         , EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
         , elab_exp e3 env )
+  | ECall (e1, [e2; e3; e4]) ->
+      failwith "HERE!!"
   | EEq (e1, e2) ->
       EEq (elab_exp e1 env, elab_exp e2 env)
   | EAdd (e1, e2) ->
       EAdd (elab_exp e1 env, elab_exp e2 env)
   (* Is this correct? Why the type mismatch? *)
+  | EBool BTru ->
+      ETrue
+  | EBool BFls ->
+      EFls
   | EInt (Integ i) ->
       EInt (int_of_string i)
   | _ ->
@@ -490,7 +514,9 @@ let elab_example () =
   else
     let channel = open_in Sys.argv.(1) in
     let in_prog = parse channel in
-    let out_prog = elab in_prog {qrefs= empty; qalls= empty; vars= empty} in
+    let out_prog =
+      elab in_prog {qrefs= empty; qalls= empty; vars= empty; newtys= empty}
+    in
     print_string
       ( "[Input abstract syntax]\n\n"
       ^ (fun x -> ShowQSharp.show (ShowQSharp.showDoc x)) in_prog
