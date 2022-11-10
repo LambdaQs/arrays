@@ -8,15 +8,15 @@ MKey.  Key  ::= Ident; -- qubit symbols/unique keys
 MKVar. KVar ::= Ident; -- key variables
 
 -- Types
-TTVar.  Typ ::= TVar;
+TTVar.  Typ ::= TVar;                        -- type variable
 TQref.  Typ ::= "qref" "<" Key ">";          -- qubit reference
 TQAll.  Typ ::= "qall" "<" KVar ">";         -- abstract qubit ref
-TFun.   Typ ::= "fun"  "(" Typ ";" Typ ")";  -- function
+TFun.   Typ ::= "fun"  "(" Typ  ";" Typ ")"; -- function
 TAll.   Typ ::= "all"  "(" TVar "." Typ ")"; -- polymorphic function
 TCmd.   Typ ::= "cmd"  "(" Typ ")";          -- command
 TProd.  Typ ::= "prod" "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
-TArr.   Typ ::= Typ "[" "]";
-TPauli. Typ ::= "pauli"; --TODO: change this to sum type
+TArr.   Typ ::= "arr"  "(" Typ ")";          -- array
+TPauli. Typ ::= "pauli";                     -- TODO: change this to sum type
 TUnit.  Typ ::= "unit";
 TBool.  Typ ::= "bool";
 TStr.   Typ ::= "string";
@@ -26,7 +26,7 @@ TDummy. Typ ::= "dummy";
 --FIXME: reorder these to be closer to Qsharp grammar
 -- Expressions
 EVar.  Exp ::= Var;
-EWld.  Exp ::= "_";
+EWld.  Exp ::= "_";                                                     -- wildcard
 ELet.  Exp ::= "let" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Exp ")";  -- let expression
 ELam.  Exp ::= "λ"  "[" Typ  ";" Typ "]" "(" Var  "." Exp ")";          -- lambda abstraction
 EAp.   Exp ::= "ap" "[" Typ  ";" Typ "]" "(" Exp  ";" Exp ")";          -- application
@@ -41,18 +41,21 @@ ETrue. Exp ::= "true";
 EFls.  Exp ::= "false";
 EIte.  Exp ::= "if" "[" Typ "]" "(" Exp ";" Exp ";" Exp ")";
 ENot.  Exp ::= "not" Exp;
--- TODO: make sure precedence is correct here
-EEq.   Exp ::= Exp "==" Exp;
-EAdd.  Exp ::= Exp "+" Exp;
-EArr.  Exp ::= "[" [Exp] "]";  --FIXME: this should probably be reimplemented to be better, also add types
-EInt.  Exp ::= Integer;
-EStr.  Exp ::= String;
--- ERef.  Exp ::= Exp "requires" Ref "ensures" Ref; -- TODO
+EArrC. Exp ::= "anew" "[" Typ "]" "(" Exp ";" [Exp] ")";                -- new array,   e.g. let a be anew[int](3; [1,2,3])
+EArrI. Exp ::= "aidx" "[" Typ "]" "(" Exp ";" Exp ")";                  -- array index, e.g. aidx[int](a; 1)
+EArrL. Exp ::= "alen" "(" Exp ")";                                      -- array length e.g. alen(a)
+EEql.  Exp ::= "equal"   "(" Exp ";" Exp ")";
+EAdd.  Exp ::= "plus"    "(" Exp ";" Exp ")";
+ELt.   Exp ::= "less"    "(" Exp ";" Exp ")";
+ELte.  Exp ::= "lesseq"  "(" Exp ";" Exp ")";
+EGt.   Exp ::= "great"   "(" Exp ";" Exp ")";
+EGte.  Exp ::= "greateq" "(" Exp ";" Exp ")";
+EInt.  Exp ::= "integ" "[" Integer "]";
+EStr.  Exp ::= "str" "[" String "]";
 
 internal EVarT. Exp ::= "(" Var ":" Typ ")";
 
 separator Exp ",";
-
 
 -- Commands
 CRet.   Cmd ::= "ret" "[" Typ "]" Exp;                                  -- return
@@ -61,29 +64,3 @@ CNew.   Cmd ::= "new" "[" Typ "]" "(" Var "." Cmd ")";                  -- new q
 CGap.   Cmd ::= Uni "(" Exp ")";                                        -- unitary gate application
 CDiag.  Cmd ::= "D" "(" Uni "," Uni ";" Exp "," Exp ")";                -- diagonal gate application
 CMeas.  Cmd ::= "meas" "(" Exp ")";                                     -- measurement
-
-{-
--- Refinements
-REq.  Ref ::= Var "=" Integer;
-
--- Programming idioms
-
--- sequential composition of commands
-seq. Cmd ::= "{" Var "<-" Cmd ";" Cmd "}";
-define seq x m1 m2 = CBnd x (ECmd m1) m2;
-
--- `do e` executes an encapsulated command and returns its result
--- This encoding requires an explicit variable argument
--- Example: do 1 x
-do. Exp ::= "do" Exp Var;
-define do e x = ECmd (CBnd x e (CRet (EVar x)));
-
--- procedure
-proc. Exp ::= "proc" "(" Var ":" Typ ")" Cmd;
-define proc x t m = ELam x t (ECmd m);
-
--- procedure call
--- This encoding also requires an explicit variable argument
-pcall. Exp ::= "call" Exp "(" Exp ")" Var;
-define pcall e1 e2 x = ECmd (CBnd x (EAp e1 e2) (CRet (EVar x)));;
--}

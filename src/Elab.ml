@@ -403,11 +403,12 @@ and elab_exp (exp : expr) (env : env_t) : exp =
         , EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
         , elab_exp e3 env )
   | EEq (e1, e2) ->
-      EEq (elab_exp e1 env, elab_exp e2 env)
+      EEql (elab_exp e1 env, elab_exp e2 env)
   | EAdd (e1, e2) ->
       EAdd (elab_exp e1 env, elab_exp e2 env)
   | EArr es ->
-      EArr (List.map (fun e -> elab_exp e env) es)
+      EArrC
+        (TDummy, EInt (List.length es), List.map (fun e -> elab_exp e env) es)
   | ETp [e] ->
       elab_exp e env
   | ETp [e1; e2] ->
