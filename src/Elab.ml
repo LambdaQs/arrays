@@ -58,9 +58,10 @@ let rec assess_purity_scope (scp : scope) : bool =
       fold_left ( && ) true (List.map assess_purity_stmt stmts)
 
 and assess_purity_stmt (stmt : stm) : bool =
-  match stmt with _ -> failwith "TODO"
+  match stmt with _ -> failwith "TODO: assess_purity_stmt"
 
-and assess_purity_expr (ex : expr) : bool = match ex with _ -> failwith "TODO"
+and assess_purity_expr (ex : expr) : bool =
+  match ex with _ -> failwith "TODO: assess_purity_expr"
 
 (* given two LQS types, returns the combined type or returns error if there is a problem *)
 (* since things may be void, I made a helper for this *)
@@ -373,7 +374,8 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
           failwith "Must bind Qubit to a variable"
           (* TODO: should this be an error? *)
       | BndName (UIdent var) ->
-          failwith "TODO"
+          failwith
+            (unimplemented_error (ShowQSharp.show (ShowQSharp.showBnd bnd)))
       | BndTplA bnds ->
           failwith "mismatch in number of binds" )
     | QInitA num ->
@@ -394,7 +396,8 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       (* FIXME: env needs to be passed correctly here *)
       EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
   | QsECall (e1, e2 :: es) ->
-      failwith "TODO" (* FIXME: env needs to be passed correctly here *)
+      (* FIXME: env needs to be passed correctly here *)
+      failwith (unimplemented_error (ShowQSharp.show (ShowQSharp.showExpr exp)))
   (* QsEAp
      (* f :: a1 -> (a2 -> (a3 -> a4)) *)
      ( typeof e1 env (* e3 -> e4 *)
