@@ -14,3 +14,52 @@ BScope (Scp (
 [EName (QUnqual (UIdent "array"))]), EInt (Int "0")); EBool (BTru); EStrI ("Array must be of the length at least 1")]));
 SRet (EIndex (EName (QUnqual (UIdent "array")), ESub (ECall (EName (QUnqual (UIdent "Length")),
 [EName (QUnqual (UIdent "array"))]), EInt (Int "1"))))]))))])])
+
+
+
+
+
+
+Prog ([NDec (QUnqual (UIdent "IfsExample"), [NSOp (QQual (QIdent "Microsoft.Quantum.Intrinsic")); NSCall (DPrefix ([], AEmpty),
+CDFun (UIdent "test", TAEmpty, ParTpl ([ParNI (NItem (UIdent "a", TpInt))])
+
+, TpInt,
+BScope (Scp (
+    [SIf (EEq (EName (QUnqual (UIdent "a")), EInt (Integ "1")),
+        Scp ([SRet (EName (QUnqual (UIdent "a")))]));
+    SEIf (EEq (EName (QUnqual (UIdent "a")), EInt (Integ "2")),
+        Scp ([SRet (EAdd (EName (QUnqual (UIdent "a")), EName (QUnqual (UIdent "a"))))]));
+    SEIf (EEq (EName (QUnqual (UIdent "a")), EInt (Integ "3")),
+        Scp ([SRet (EAdd (EName (QUnqual (UIdent "a")), EInt (Integ "7")))]));
+    SElse (Scp ([SLet (BndName (UIdent "v"), EBool (BTru)); SRet (EName (QUnqual (UIdent "v")))]))]))))])])
+
+[Output abstract syntax]
+
+CBnd (TFun (TInt, TInt), TDummy,
+    ELam (TInt, TInt, MVar (Ident "a"),
+    ECmd (TDummy, CRet (TDummy, EIte (TDummy,
+    EEq (EVar (MVar (Ident "a")), EInt (1)),
+    EVar (MVar (Ident "a")),
+    EIte (TDummy, EEq (EVar (MVar (Ident "a")), EInt (2)), EAdd (EVar (MVar (Ident "a")), EVar (MVar (Ident "a"))),
+    EIte (TDummy, EEq (EVar (MVar (Ident "a")), EInt (3)), EAdd (EVar (MVar (Ident "a")), EInt (7)),
+    ELet (TDummy, TDummy, ETrue, MVar (Ident "v"), EVar (MVar (Ident "v"))))))))),
+    MVar (Ident "test"), CRet (TUnit, ETriv))
+
+
+
+
+
+Prog ([NDec (QQual (QIdent "Microsoft.Quantum.Arrays"), [NSOp (QQual (QIdent "Microsoft.Quantum.Logical")); NSCall (DPrefix ([], AEmpty),
+CDFun (UIdent "All", TAList ([TIdent "'T"]),
+
+ParTpl ([ParNI (NItem (UIdent "predicate", TpTpl ([TpFun (TpPar (TIdent "'T"), TpBool)])));
+ParNI (NItem (UIdent "array", TpArr (TpPar (TIdent "'T"))))]), TpBool,
+
+BScope (Scp ([SRet
+(ECall (EName (QUnqual (UIdent "Fold")),
+
+[EName (QUnqual (UIdent "And"));
+ EBool (BTru);
+ ECall (EName (QUnqual (UIdent "Mapped")), [EName (QUnqual (UIdent "predicate"));
+
+EName (QUnqual (UIdent "array"))])]))]))))])])

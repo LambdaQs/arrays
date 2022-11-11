@@ -26,12 +26,13 @@ let wild_var = MVar (Ident "_wild_")
 module Strmap = Map.Make (String)
 open Strmap
 
-(*FIXME: we may also need the var -> typ map, including exp here may be useless *)
+(*FIXME: we may only need the var -> typ map, including exp here may be useless *)
 type env_t =
   { qrefs: int Strmap.t
   ; qalls: int Strmap.t
-  ; vars: (typ * exp) Strmap.t
+  ; vars: typ Strmap.t
   ; newtys: typ Strmap.t }
+(*FIXME: make newtys a more simpler structure *)
 
 (* FIXME: dummy implementation!! *)
 (* JZ: what type is term here? Im assuming its an LQS expression *)
@@ -391,11 +392,10 @@ and elab_exp (exp : expr) (env : env_t) : exp =
   | ECall (e1, [e2]) ->
       (* FIXME: env needs to be passed correctly here *)
       EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
-  | ECall (e1, [e2; e3]) ->
-      (* FIXME: env needs to be passed correctly here *)
-      EAp
-        ( TDummy
-          (* its too annoying to access this here and will probably be TDummy anyways *)
+  | ECall (e1, e2 :: es) ->
+      failwith "TODO" (* FIXME: env needs to be passed correctly here *) EAp
+        (* f :: a1 -> (a2 -> (a3 -> a4)) *)
+        ( typeof e1 env (* e3 -> e4 *)
         , typeof e3 env
         , EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
         , elab_exp e3 env )
