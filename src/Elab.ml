@@ -7,6 +7,8 @@ open Either
 
 let unimplemented_error s = "NYI: " ^ s
 
+type lqsterm = (exp, cmd) Either.t
+
 (*
 TODO:
 1) Q# -> concrete lambda Q#
@@ -77,25 +79,25 @@ let combine_types (ty1 : typ) (ty2 : typ) : typ =
 
 (* elab takes in the the program and the environment composed of the
    signature and context *)
-let rec elab (prog : doc) (env : env_t) : cmd =
+let rec elab (prog : doc) (env : env_t) : exp =
   match prog with
   | Prog [ns] ->
       elab_nmspace ns env
   | _ ->
       failwith (unimplemented_error "Multiple namespaces")
 
-and elab_nmspace (ns : nmspace) (env : env_t) : cmd =
+and elab_nmspace (ns : nmspace) (env : env_t) : exp =
   match ns with
   (* TODO: do something with the namespace's name *)
   (* Should probably store them in the env! *)
   | NDec (_, elmts) ->
       elab_nselmts elmts env
 
-and elab_nselmts (elmts : nSElmnt list) (env : env_t) : cmd =
+and elab_nselmts (elmts : nSElmnt list) (env : env_t) : exp =
   match elmts with
   (* TODO: do we always want to return empty? *)
   | [] ->
-      CRet (TUnit, ETriv)
+      ETriv
   (* TODO: do something with imports *)
   | NSOp _ :: elmts ->
       elab_nselmts elmts env
@@ -113,7 +115,7 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : cmd =
           let env' = {env with vars= vars'} in
           let m = elab_nselmts t env in
           (*FIXME: do we want the final type here? or the type of the entire function f *)
-          CBnd (ty_body, typeof m env', body, f, m) )
+          ELet (ty_body, typeof m env', body, f, m) )
 (*FIXME: pretty sure m will always typecheck to unit?*)
 
 (* preps the param, to be used in curry *)
@@ -137,7 +139,7 @@ and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
       let env' = {env with vars= vars'} in
       (argtyp', env')
 
-(* I am having curry return a type here since its pretty easy to get the type of the curried
+(* NOTE: curry returns a type here since it's pretty easy to get the type of the curried
    function, possibly easier than to use typeof? *)
 and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) :
     typ * exp =
@@ -155,7 +157,7 @@ and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) :
           ( typ'
           , rettyp' (*TODO: per above rettyp' could also be ty_body? *)
           , MVar (Ident arg)
-          , ECmd (ty_body, pbody) ) )
+          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
   | ParNI (NItem (UIdent arg, typ)) :: t ->
       let typ', env' = prep_param arg typ env in
       let cur_ty, cur = curry t rettyp body env' in
@@ -187,7 +189,7 @@ and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
       let rettyp', body' = curry params rettyp body env in
       (MVar (Ident name), rettyp', body')
   | _ ->
-      failwith (unimplemented_error "Callables with multiple type parameters")
+      failwith (unimplemented_error "operation with type parameters")
 
 and elab_type (typ : tp) (env : env_t) : typ =
   match typ with
@@ -241,7 +243,7 @@ and elab_type (typ : tp) (env : env_t) : typ =
   | TpUnit ->
       TUnit
 
-and elab_body (body : body) (env : env_t) : typ * cmd =
+and elab_body (body : body) (env : env_t) : typ * lqsterm =
   match body with
   | BSpec _ ->
       failwith (unimplemented_error "Specializations (BSpec)")
@@ -249,10 +251,10 @@ and elab_body (body : body) (env : env_t) : typ * cmd =
       let scope = elab_stmts stmts env in
       match scope with
       | Left exp ->
-          (typeof exp env, CRet (typeof exp env, exp))
+          (typeof exp env, Left exp)
           (*FIXME: is s_ty the type for both parts here? *)
       | Right cmd ->
-          (typeof cmd env, cmd) )
+          (typeof cmd env, Right cmd) )
 (*FIXME: is it ok that cmd is a command not an exp here? *)
 
 (*
@@ -268,7 +270,7 @@ and elab_body (body : body) (env : env_t) : typ * cmd =
      CRet (typeof exp env, exp)
    else elab_stmts_op stmts env *)
 
-and elab_stmts (stmts : stm list) (env : env_t) : (exp, cmd) Either.t =
+and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
   match stmts with
   (* TODO: shouldn't always return empty *)
   (* namely, how to deal with the final return statement? *)
@@ -542,7 +544,7 @@ let elab_main () =
     in
     print_string
       ( "[Output abstract syntax]\n\n"
-      ^ (fun x -> ShowLambdaQs.show (ShowLambdaQs.showCmd x)) out_ast
+      ^ (fun x -> ShowLambdaQs.show (ShowLambdaQs.showExp x)) out_ast
       ^ "\n\n" )
 ;;
 

@@ -45,6 +45,7 @@ EArrC. Exp ::= "anew" "[" Typ "]" "(" Exp ";" [Exp] ")";                -- new a
 EArrI. Exp ::= "aidx" "[" Typ "]" "(" Exp ";" Exp ")";                  -- array index, e.g. aidx[int](a; 1) gets the 2nd elem in a
 EArrL. Exp ::= "alen" "(" Exp ")";                                      -- array length e.g. alen(a)
 EEql.  Exp ::= "equal"   "(" Exp ";" Exp ")";
+ENEql. Exp ::= "noteq"   "(" Exp ";" Exp ")";
 EAdd.  Exp ::= "plus"    "(" Exp ";" Exp ")";
 ELt.   Exp ::= "less"    "(" Exp ";" Exp ")";
 ELte.  Exp ::= "lesseq"  "(" Exp ";" Exp ")";
