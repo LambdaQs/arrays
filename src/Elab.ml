@@ -387,50 +387,50 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
    encapsulated accordingly in elab_exp *)
 and elab_exp (exp : expr) (env : env_t) : exp =
   match exp with
-  | EName (QUnqual (UIdent x)) ->
+  | QsEName (QUnqual (UIdent x)) ->
       EVar (MVar (Ident x))
       (*FIXME: if ECall is a quantum op, things must be done differently here *)
-  | ECall (e1, [e2]) ->
+  | QsECall (e1, [e2]) ->
       (* FIXME: env needs to be passed correctly here *)
       EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
-  | ECall (e1, e2 :: es) ->
+  | QsECall (e1, e2 :: es) ->
       failwith "TODO" (* FIXME: env needs to be passed correctly here *)
-  (* EAp
+  (* QsEAp
      (* f :: a1 -> (a2 -> (a3 -> a4)) *)
      ( typeof e1 env (* e3 -> e4 *)
      , typeof e3 env
      , EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
      , elab_exp e3 env ) *)
-  (* | ECall (e1, [e2; e3; e4]) ->
+  (* | QsECall (e1, [e2; e3; e4]) ->
       EAp
         ( TDummy
           (* its too annoying to access this here and will probably be TDummy anyways *)
         , typeof e3 env
         , EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
         , elab_exp e3 env ) *)
-  | EEq (e1, e2) ->
+  | QsEEq (e1, e2) ->
       EEql (elab_exp e1 env, elab_exp e2 env)
-  | EAdd (e1, e2) ->
+  | QsEAdd (e1, e2) ->
       EAdd (elab_exp e1 env, elab_exp e2 env)
-  | EArr es ->
+  | QsEArr es ->
       EArrC
         (TDummy, EInt (List.length es), List.map (fun e -> elab_exp e env) es)
-  | ETp [e] ->
+  | QsETp [e] ->
       elab_exp e env
-  | ETp [e1; e2] ->
+  | QsETp [e1; e2] ->
       EPair (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
-  | EStr str ->
+  | QsEStr str ->
       EStr str
-  | EStrI str ->
+  | QsEStrI str ->
       EStr str
-  | EEmp ->
+  | QsEEmp ->
       EWld
-  | EBool BTru ->
+  | QsEBool BTru ->
       ETrue
-  | EBool BFls ->
+  | QsEBool BFls ->
       EFls
   (* Is this correct? Why the type mismatch? *)
-  | EInt (Integ i) ->
+  | QsEInt (Integ i) ->
       EInt (int_of_string i)
   | x ->
       failwith (unimplemented_error (ShowQSharp.show (ShowQSharp.showExpr x)))

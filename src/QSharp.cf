@@ -171,60 +171,60 @@ QInitT. QbitInit ::= "(" [QbitInit] ")";
 separator QbitInit ",";
 
 -- Expressions
-EEmp.     Expr21 ::= "_";
-EName.    Expr21 ::= QName;
-ENameT.   Expr21 ::= QName "<" [Tp] ">";
-EInt.     Expr21 ::= Integ;
-EBInt.    Expr21 ::= BigInt;
-EDbl.     Expr21 ::= Doubl;
-EStr.     Expr21 ::= String;
-EStrI.    Expr21 ::= "$" String;
-EBool.    Expr21 ::= BoolL;
-ERes.     Expr21 ::= ResL;
-EPli.     Expr21 ::= PliL;
-ETp.      Expr21 ::= "(" [Expr] ")";
-EArr.     Expr21 ::= "[" [Expr] "]";
-ESArr.    Expr21 ::= "[" Expr "," ArSizeEq Expr "]";
--- ELamFn.   Expr21   ::= Bnd "->" Expr21; -- TODO function lambdas (QuantumROM.qs)
--- ELamOp.   Expr21   ::= Bnd "=>" Expr21; -- TODO operation lambdas (SinglyControlled.qs)
+QsEEmp.     Expr21 ::= "_";
+QsEName.    Expr21 ::= QName;
+QsENameT.   Expr21 ::= QName "<" [Tp] ">";
+QsEInt.     Expr21 ::= Integ;
+QsEBInt.    Expr21 ::= BigInt;
+QsEDbl.     Expr21 ::= Doubl;
+QsEStr.     Expr21 ::= String;
+QsEStrI.    Expr21 ::= "$" String;
+QsEBool.    Expr21 ::= BoolL;
+QsERes.     Expr21 ::= ResL;
+QsEPli.     Expr21 ::= PliL;
+QsETp.      Expr21 ::= "(" [Expr] ")";
+QsEArr.     Expr21 ::= "[" [Expr] "]";
+QsESArr.    Expr21 ::= "[" Expr "," ArSizeEq Expr "]";
+-- QsELamFn.   Expr21   ::= Bnd "->" Expr21; -- TODO function lambdas (QuantumROM.qs)
+-- QsELamOp.   Expr21   ::= Bnd "=>" Expr21; -- TODO operation lambdas (SinglyControlled.qs)
 -- see git:qsharp-compiler/src/QsCompiler/TextProcessor/QsKeywords.fs
 -- Combinators (calls and array items) & Modifiers (functors and unwrap)
-EItem.    Expr20 ::= Expr20 "::" UIdent;
-EUnwrap.  Expr19 ::= Expr19 "!";
-EIndex.   Expr19 ::= Expr19 "[" Expr "]";
-ECtrl.    Expr18 ::= "Controlled" Expr18;   -- 951
-EAdj.     Expr18 ::= "Adjoint" Expr18;      -- 950
-ECall.    Expr17 ::= Expr17 "(" [Expr] ")";  -- 900
+QsEItem.    Expr20 ::= Expr20 "::" UIdent;
+QsEUnwrap.  Expr19 ::= Expr19 "!";
+QsEIndex.   Expr19 ::= Expr19 "[" Expr "]";
+QsECtrl.    Expr18 ::= "Controlled" Expr18;   -- 951
+QsEAdj.     Expr18 ::= "Adjoint" Expr18;      -- 950
+QsECall.    Expr17 ::= Expr17 "(" [Expr] ")";  -- 900
 -- Operators
-EPos.     Expr16 ::= "+"   Expr16;          -- 45
-ENeg.     Expr16 ::= "-"   Expr16;          -- 45
-ELNot.    Expr16 ::= "not" Expr16;          -- 45
-EBNot.    Expr16 ::= "~~~" Expr16;          -- 45
-EPow.     Expr15 ::= Expr16 "^" Expr15;
-EMul.     Expr14 ::= Expr14 "*" Expr15;
-EDiv.     Expr14 ::= Expr14 "/" Expr15;
-EMod.     Expr14 ::= Expr14 "%" Expr15;
-EAdd.     Expr13 ::= Expr13 "+" Expr14;
-ESub.     Expr13 ::= Expr13 "-" Expr14;
-EShiftR.  Expr12 ::= Expr12 ">>>" Expr13;
-EShiftL.  Expr12 ::= Expr12 SHFTL Expr13;
-EGt.      Expr11 ::= Expr11 ">"  Expr12;
-EGte.     Expr11 ::= Expr11 ">=" Expr12;
-ELt.      Expr11 ::= Expr11 LT   Expr12;
-ELte.     Expr11 ::= Expr11 LTE  Expr12;
-EEq.      Expr10 ::= Expr10 "==" Expr11;
-ENeq.     Expr10 ::= Expr10 "!=" Expr11;
-EBAnd.    Expr9  ::= Expr9 "&&&" Expr10;
-EBXor.    Expr8  ::= Expr8 "^^^" Expr9;
-EBOr.     Expr7  ::= Expr7 "|||" Expr8;
-ELAnd.    Expr6  ::= Expr6 "and" Expr7;
-ELOr.     Expr5  ::= Expr5 "or" Expr6;
-ECond.    Expr4  ::= Expr5 "?" Expr "|" Expr4;  -- 5
-ERange.   Expr3  ::= Expr3 ".." Expr4;         -- 2
-ERangeR.  Expr2  ::= Expr2 "...";
-ERangeL.  Expr1  ::= "..." Expr1;
-ERangeLR. Expr   ::= "...";                  -- 2
-EUpdate.  Expr   ::= Expr "w/" Expr LARR Expr1; -- 1
+QsEPos.     Expr16 ::= "+"   Expr16;          -- 45
+QsENeg.     Expr16 ::= "-"   Expr16;          -- 45
+QsELNot.    Expr16 ::= "not" Expr16;          -- 45
+QsEBNot.    Expr16 ::= "~~~" Expr16;          -- 45
+QsEPow.     Expr15 ::= Expr16 "^" Expr15;
+QsEMul.     Expr14 ::= Expr14 "*" Expr15;
+QsEDiv.     Expr14 ::= Expr14 "/" Expr15;
+QsEMod.     Expr14 ::= Expr14 "%" Expr15;
+QsEAdd.     Expr13 ::= Expr13 "+" Expr14;
+QsESub.     Expr13 ::= Expr13 "-" Expr14;
+QsEShiftR.  Expr12 ::= Expr12 ">>>" Expr13;
+QsEShiftL.  Expr12 ::= Expr12 SHFTL Expr13;
+QsEGt.      Expr11 ::= Expr11 ">"  Expr12;
+QsEGte.     Expr11 ::= Expr11 ">=" Expr12;
+QsELt.      Expr11 ::= Expr11 LT   Expr12;
+QsELte.     Expr11 ::= Expr11 LTE  Expr12;
+QsEEq.      Expr10 ::= Expr10 "==" Expr11;
+QsENeq.     Expr10 ::= Expr10 "!=" Expr11;
+QsEBAnd.    Expr9  ::= Expr9 "&&&" Expr10;
+QsEBXor.    Expr8  ::= Expr8 "^^^" Expr9;
+QsEBOr.     Expr7  ::= Expr7 "|||" Expr8;
+QsELAnd.    Expr6  ::= Expr6 "and" Expr7;
+QsELOr.     Expr5  ::= Expr5 "or" Expr6;
+QsECond.    Expr4  ::= Expr5 "?" Expr "|" Expr4;  -- 5
+QsERange.   Expr3  ::= Expr3 ".." Expr4;         -- 2
+QsERangeR.  Expr2  ::= Expr2 "...";
+QsERangeL.  Expr1  ::= "..." Expr1;
+QsERangeLR. Expr   ::= "...";                  -- 2
+QsEUpdate.  Expr   ::= Expr "w/" Expr LARR Expr1; -- 1
 
 coercions Expr 21 ;
 
