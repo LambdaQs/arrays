@@ -5,7 +5,7 @@ open Map
 open List
 open Either
 
-let unimplemented_error s = "Not yet implemented: " ^ s
+let unimplemented_error s = "NYI: " ^ s
 
 (*
 TODO:
@@ -427,9 +427,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
   | EInt (Integ i) ->
       EInt (int_of_string i)
   | x ->
-      failwith
-        (unimplemented_error
-           ("expressions: " ^ ShowQSharp.show (ShowQSharp.showExpr x)) )
+      failwith (unimplemented_error (ShowQSharp.show (ShowQSharp.showExpr x)))
 
 (* note that if and elif are basically the same when they come first, elif just had stuff before it *)
 (* However, elif is different from else when they appear second *)
@@ -522,27 +520,26 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
   | _ ->
       failwith "Unexpected case in ITE translation"
 
-(* Example: *)
 let parse (c : in_channel) : doc =
   ParQSharp.pDoc LexQSharp.token (Lexing.from_channel c)
 
-let elab_example () =
+let elab_main () =
   (* TODO: add real cmd line arg parsing *)
   if Array.length Sys.argv != 2 then failwith "Usage: ./TestElab <filename>"
   else
     let channel = open_in Sys.argv.(1) in
-    let in_prog = parse channel in
+    let in_ast = parse channel in
     print_string
       ( "[Input abstract syntax]\n\n"
-      ^ (fun x -> ShowQSharp.show (ShowQSharp.showDoc x)) in_prog
+      ^ (fun x -> ShowQSharp.show (ShowQSharp.showDoc x)) in_ast
       ^ "\n\n" ) ;
-    let out_prog =
-      elab in_prog {qrefs= empty; qalls= empty; vars= empty; newtys= empty}
+    let out_ast =
+      elab in_ast {qrefs= empty; qalls= empty; vars= empty; newtys= empty}
     in
     print_string
       ( "[Output abstract syntax]\n\n"
-      ^ (fun x -> ShowLambdaQs.show (ShowLambdaQs.showCmd x)) out_prog
+      ^ (fun x -> ShowLambdaQs.show (ShowLambdaQs.showCmd x)) out_ast
       ^ "\n\n" )
 ;;
 
-elab_example ()
+elab_main ()

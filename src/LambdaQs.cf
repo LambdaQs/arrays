@@ -51,7 +51,7 @@ ELte.  Exp ::= "lesseq"  "(" Exp ";" Exp ")";
 EGt.   Exp ::= "great"   "(" Exp ";" Exp ")";
 EGte.  Exp ::= "greateq" "(" Exp ";" Exp ")";
 EInt.  Exp ::= "integ" "[" Integer "]";
-EStr.  Exp ::= "str" "[" String "]";
+EStr.  Exp ::= "str"   "[" String  "]";
 
 internal EVarT. Exp ::= "(" Var ":" Typ ")";
 
