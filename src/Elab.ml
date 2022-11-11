@@ -26,7 +26,6 @@ let wild_var = MVar (Ident "_wild_")
 module Strmap = Map.Make (String)
 open Strmap
 
-(*FIXME: we may only need the var -> typ map, including exp here may be useless *)
 type env_t =
   { qrefs: int Strmap.t
   ; qalls: int Strmap.t
@@ -64,17 +63,17 @@ and assess_purity_expr (ex : expr) : bool = match ex with _ -> failwith "TODO"
 (* given two LQS types, returns the combined type or returns error if there is a problem *)
 (* since things may be void, I made a helper for this *)
 (* TODO: figure out what to do with TQRef here *)
-(* let combine_types (ty1 : typ) (ty2 : typ) : typ =
-   match (ty1, ty2) with
-   | TDummy, _ ->
-       ty2
-       (* FIXME: but sometimes void should take precidence like in a simple if statement? *)
-   | _, TDummy ->
-       ty1
-   | TQref _, TQref _ ->
-       ty1
-   | _ ->
-       if ty1 == ty2 then ty1 else failwith "Branches have different types" *)
+let combine_types (ty1 : typ) (ty2 : typ) : typ =
+  match (ty1, ty2) with
+  | TDummy, _ ->
+      ty2
+      (* FIXME: but sometimes void should take precidence like in a simple if statement? *)
+  | _, TDummy ->
+      ty1
+  | TQref _, TQref _ ->
+      ty1
+  | _ ->
+      if ty1 == ty2 then ty1 else failwith "Branches have different types"
 
 (* elab takes in the the program and the environment composed of the
    signature and context *)
@@ -109,7 +108,7 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : cmd =
       let f, ty_body, body = elab_calldec calld env in
       match f with
       | MVar (Ident func_name) ->
-          let vars' = Strmap.add func_name (ty_body, EVar f) env.vars in
+          let vars' = Strmap.add func_name ty_body env.vars in
           (* f is a function here *)
           let env' = {env with vars= vars'} in
           let m = elab_nselmts t env in
@@ -134,7 +133,7 @@ and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
       (*FIXME: this seems slightly wrong, but we need to somehow connect
                argtype to arg when elabing body and I believe this does that *)
       let argtyp' = elab_type argtyp env in
-      let vars' = Strmap.add arg (argtyp', EVar (MVar (Ident arg))) env.vars in
+      let vars' = Strmap.add arg argtyp' env.vars in
       let env' = {env with vars= vars'} in
       (argtyp', env')
 
@@ -303,7 +302,7 @@ and elab_stmts (stmts : stm list) (env : env_t) : (exp, cmd) Either.t =
     | BndName (UIdent var) -> (
         let e = elab_exp exp env in
         let ty_e = typeof e env in
-        let vars' = Strmap.add var (ty_e, e) env.vars in
+        let vars' = Strmap.add var ty_e env.vars in
         let env' = {env with vars= vars'} in
         let s = elab_stmts stmts' env' in
         match s with
@@ -393,19 +392,20 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       (* FIXME: env needs to be passed correctly here *)
       EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
   | ECall (e1, e2 :: es) ->
-      failwith "TODO" (* FIXME: env needs to be passed correctly here *) EAp
-        (* f :: a1 -> (a2 -> (a3 -> a4)) *)
-        ( typeof e1 env (* e3 -> e4 *)
-        , typeof e3 env
-        , EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
-        , elab_exp e3 env )
-  | ECall (e1, [e2; e3; e4]) ->
+      failwith "TODO" (* FIXME: env needs to be passed correctly here *)
+  (* EAp
+     (* f :: a1 -> (a2 -> (a3 -> a4)) *)
+     ( typeof e1 env (* e3 -> e4 *)
+     , typeof e3 env
+     , EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
+     , elab_exp e3 env ) *)
+  (* | ECall (e1, [e2; e3; e4]) ->
       EAp
         ( TDummy
           (* its too annoying to access this here and will probably be TDummy anyways *)
         , typeof e3 env
         , EAp (typeof e1 env, typeof e2 env, elab_exp e1 env, elab_exp e2 env)
-        , elab_exp e3 env )
+        , elab_exp e3 env ) *)
   | EEq (e1, e2) ->
       EEql (elab_exp e1 env, elab_exp e2 env)
   | EAdd (e1, e2) ->
