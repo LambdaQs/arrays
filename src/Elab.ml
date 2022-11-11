@@ -167,20 +167,24 @@ and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) :
 and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
   match calld with
   (* TODO: make sure only pure things happen inside functions, although qubits can still be passed *)
+  (* FIXME: add mechanism here to ensure that functions stay pure *)
   | CDFun (UIdent name, TAEmpty, ParTpl params, rettyp, body) ->
       let rettyp', body' = curry params rettyp body env in
       (MVar (Ident name), rettyp', body')
-  (*FIXME: add mechanism here to ensure that functions stay pure *)
-  (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
-  | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) ->
-      let rettyp', body' = curry params rettyp body env in
-      (MVar (Ident name), rettyp', body')
-  | CDFun (UIdent name, TAList [TIdent new_ty], ParTpl params, rettyp, body) ->
+  | CDFun (UIdent name, TAList tvars, ParTpl params, rettyp, body) ->
       let newtys' =
-        Strmap.add new_ty (TTVar (MTVar (Ident new_ty))) env.newtys
+        fold_left
+          (fun a b ->
+            let (TIdent bstr) = b in
+            Strmap.add bstr (TTVar (MTVar (Ident bstr))) a )
+          env.newtys tvars
       in
       let env' = {env with newtys= newtys'} in
       let rettyp', body' = curry params rettyp body env' in
+      (MVar (Ident name), rettyp', body')
+  (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
+  | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) ->
+      let rettyp', body' = curry params rettyp body env in
       (MVar (Ident name), rettyp', body')
   | _ ->
       failwith (unimplemented_error "Callables with multiple type parameters")
