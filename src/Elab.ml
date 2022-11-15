@@ -32,8 +32,8 @@ type env_t =
   { qrefs: int Strmap.t
   ; qalls: int Strmap.t
   ; vars: typ Strmap.t
-  ; newtys: typ Strmap.t }
-(*FIXME: make newtys a more simpler structure *)
+  ; tvars: typ Strmap.t }
+(*FIXME: make tvars a more simpler structure *)
 
 (* FIXME: dummy implementation!! *)
 (* JZ: what type is term here? Im assuming its an LQS expression *)
@@ -50,18 +50,6 @@ let rec extract_ifs (stmts : stm list) : stm list * stm list =
       ([SElse scope], stmts')
   | _ ->
       ([], stmts)
-
-(* note that a scope is classical iff all its stmts are pure *)
-let rec assess_purity_scope (scp : scope) : bool =
-  match scp with
-  | Scp stmts ->
-      fold_left ( && ) true (List.map assess_purity_stmt stmts)
-
-and assess_purity_stmt (stmt : stm) : bool =
-  match stmt with _ -> failwith "TODO: assess_purity_stmt"
-
-and assess_purity_expr (ex : expr) : bool =
-  match ex with _ -> failwith "TODO: assess_purity_expr"
 
 (* given two LQS types, returns the combined type or returns error if there is a problem *)
 (* since things may be void, I made a helper for this *)
@@ -107,14 +95,14 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : exp =
   | NSTy _ :: _ ->
       failwith (unimplemented_error "Type declarations (NSTy)")
   (* TODO: do something with declaration prefix *)
-  | NSClbl (_, calld) :: t -> (
+  | NSClbl (_, calld) :: elmts -> (
       let f, ty_body, body = elab_calldec calld env in
       match f with
       | MVar (Ident func_name) ->
           let vars' = Strmap.add func_name ty_body env.vars in
           (* f is a function here *)
           let env' = {env with vars= vars'} in
-          let m = elab_nselmts t env in
+          let m = elab_nselmts elmts env' in
           (*FIXME: do we want the final type here? or the type of the entire function f *)
           ELet (ty_body, typeof (Left m) env', body, f, m) )
 (*FIXME: pretty sure m will always typecheck to unit?*)
@@ -127,14 +115,14 @@ and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
       let rettyp', body' = curry params rettyp body env in
       (MVar (Ident name), rettyp', body')
   | CDFun (UIdent name, TAList tvars, ParTpl params, rettyp, body) ->
-      let newtys' =
+      let tvars' =
         fold_left
           (fun a b ->
             let (TIdent bstr) = b in
             Strmap.add bstr (TTVar (MTVar (Ident bstr))) a )
-          env.newtys tvars
+          env.tvars tvars
       in
-      let env' = {env with newtys= newtys'} in
+      let env' = {env with tvars= tvars'} in
       let rettyp', body' = curry params rettyp body env' in
       (MVar (Ident name), rettyp', body')
   (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
@@ -174,12 +162,12 @@ and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) :
 and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
   match argtyp with
   | TpQbit ->
-      (*FIXME: should we also be adding to vars here? *)
-      let i = cardinal env.qalls in
       (*FIXME: should probably generate i a different way, but fine for now *)
-      let qalls' = Strmap.add arg i env.qalls in
-      let env' = {env with qalls= qalls'} in
+      let i = cardinal env.qalls in
       let qtype = TQAll (MKVar (Ident (string_of_int i))) in
+      let qalls' = Strmap.add arg i env.qalls in
+      let vars' = Strmap.add arg qtype env.vars in
+      let env' = {env with qalls= qalls'; vars= vars'} in
       (qtype, env')
       (*FIXME: if type is Qubit[n], should be more like first branch?
           Not really sure what to do here. *)
@@ -261,7 +249,6 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
       let ite = elab_ite (SIf (exp, scope) :: ites) env in
       match stmts'' with
       | [] ->
-          (*FIXME: should check if ite is pure or not and encapsulate accordingly *)
           (* or should ite always be an exp. this seems a bit nicer, we don't need to put it in a cmd just because,
              the returns within will be encapsulated *)
           Left ite
@@ -352,7 +339,7 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
               , ECmd (typeof s2 env, m2) )
           else failwith "branches cannot be different types"
       | _ ->
-          failwith "branches cannot be different purities" )
+          failwith "branches cannot be different types" )
   | [SEIf (cond, Scp stmts1); SElse (Scp stmts2)] -> (
       let cond' = elab_exp cond env in
       let s1 = elab_stmts stmts1 env in
@@ -371,7 +358,7 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
               , ECmd (typeof s2 env, m2) )
           else failwith "branches cannot be different types"
       | _ ->
-          failwith "branches cannot be different purities" )
+          failwith "branches cannot be different types" )
   | SIf (cond, Scp stmts1) :: stmts' -> (
       let cond' = elab_exp cond env in
       let s1 = elab_stmts stmts1 env in
@@ -465,7 +452,7 @@ and elab_type (typ : tp) (env : env_t) : typ =
   | TpEmp ->
       failwith (unimplemented_error "(TEmp)")
   | TpPar (TIdent tyarg) -> (
-    match Strmap.find_opt tyarg env.newtys with
+    match Strmap.find_opt tyarg env.tvars with
     | None ->
         failwith "Undefined type variable"
     | Some t ->
@@ -526,7 +513,7 @@ let elab_main () =
       ^ (fun x -> ShowQSharp.show (ShowQSharp.showDoc x)) in_ast
       ^ "\n\n" ) ;
     let out_ast =
-      elab in_ast {qrefs= empty; qalls= empty; vars= empty; newtys= empty}
+      elab in_ast {qrefs= empty; qalls= empty; vars= empty; tvars= empty}
     in
     print_string
       ( "[Output abstract syntax]\n\n"
