@@ -9,19 +9,19 @@ MKVar. KVar ::= Ident; -- key variables
 
 -- Types
 TTVar.  Typ ::= TVar;                        -- type variable
-TQref.  Typ ::= "qref" "<" Key ">";          -- qubit reference
-TQAll.  Typ ::= "qall" "<" KVar ">";         -- abstract qubit ref
-TFun.   Typ ::= "fun"  "(" Typ  ";" Typ ")"; -- function
-TAll.   Typ ::= "all"  "(" TVar "." Typ ")"; -- polymorphic function
-TCmd.   Typ ::= "cmd"  "(" Typ ")";          -- command
-TProd.  Typ ::= "prod" "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
-TArr.   Typ ::= "arr"  "(" Typ ")";          -- array
-TPauli. Typ ::= "pauli";                     -- TODO: change this to sum type
-TUnit.  Typ ::= "unit";
-TBool.  Typ ::= "bool";
-TStr.   Typ ::= "string";
-TInt.   Typ ::= "int";
-TDummy. Typ ::= "dummy";
+TQref.  Typ ::= "tqref" "<" Key ">";          -- qubit reference
+TQAll.  Typ ::= "tqall" "<" KVar ">";         -- abstract qubit ref
+TFun.   Typ ::= "tfun"  "(" Typ  ";" Typ ")"; -- function
+TAll.   Typ ::= "tall"  "(" TVar "." Typ ")"; -- polymorphic function
+TCmd.   Typ ::= "tcmd"  "(" Typ ")";          -- command
+TProd.  Typ ::= "tprod" "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
+TArr.   Typ ::= "tarr"  "(" Typ ")";          -- array
+TPauli. Typ ::= "tpauli";                     -- TODO: change this to sum type
+TUnit.  Typ ::= "tunit";
+TBool.  Typ ::= "tbool";
+TStr.   Typ ::= "tstr";
+TInt.   Typ ::= "tint";
+TDummy. Typ ::= "tdummy";
 
 --FIXME: reorder these to be closer to Qsharp grammar
 -- Expressions
