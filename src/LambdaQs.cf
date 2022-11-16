@@ -44,14 +44,21 @@ ENot.  Exp ::= "not" Exp;
 EArrC. Exp ::= "anew" "[" Typ "]" "(" Exp ";" [Exp] ")";                -- new array,   e.g. let a be anew[int](3; [1,2,3])
 EArrI. Exp ::= "aidx" "[" Typ "]" "(" Exp ";" Exp ")";                  -- array index, e.g. aidx[int](a; 1) gets the 2nd elem in a
 EArrL. Exp ::= "alen" "(" Exp ")";                                      -- array length e.g. alen(a)
-EEql.  Exp ::= "equal"   "(" Exp ";" Exp ")";
-ENEql. Exp ::= "noteq"   "(" Exp ";" Exp ")";
+EPow.  Exp ::= "pow"     "(" Exp ";" Exp ")";
+EMul.  Exp ::= "mul"     "(" Exp ";" Exp ")";
+EDiv.  Exp ::= "div"     "(" Exp ";" Exp ")";
+EMod.  Exp ::= "mod"     "(" Exp ";" Exp ")";
 EAdd.  Exp ::= "plus"    "(" Exp ";" Exp ")";
-ELt.   Exp ::= "less"    "(" Exp ";" Exp ")";
-ELte.  Exp ::= "lesseq"  "(" Exp ";" Exp ")";
+ESub.  Exp ::= "minus"   "(" Exp ";" Exp ")";
+EAdd.  Exp ::= "plus"    "(" Exp ";" Exp ")";
 EGt.   Exp ::= "great"   "(" Exp ";" Exp ")";
 EGte.  Exp ::= "greateq" "(" Exp ";" Exp ")";
+ELt.   Exp ::= "less"    "(" Exp ";" Exp ")";
+ELte.  Exp ::= "lesseq"  "(" Exp ";" Exp ")";
+EEql.  Exp ::= "equal"   "(" Exp ";" Exp ")";
+ENEql. Exp ::= "noteq"   "(" Exp ";" Exp ")";
 EInt.  Exp ::= "integ" "[" Integer "]";
+EDbl.  Exp ::= "doubl" "[" Double "]";
 EStr.  Exp ::= "str"   "[" String  "]";
 
 internal EVarT. Exp ::= "(" Var ":" Typ ")";
@@ -61,6 +68,7 @@ separator Exp ",";
 -- Commands
 CRet.   Cmd ::= "ret" "[" Typ "]" Exp;                                  -- return
 CBnd.   Cmd ::= "bnd" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Cmd ")"; -- sequence
+
 CNew.   Cmd ::= "new" "[" Typ "]" "(" Var "." Cmd ")";                  -- new qubit reference
 CGap.   Cmd ::= Uni "(" Exp ")";                                        -- unitary gate application
 CDiag.  Cmd ::= "D" "(" Uni "," Uni ";" Exp "," Exp ")";                -- diagonal gate application

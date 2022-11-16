@@ -392,23 +392,32 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
    encapsulated accordingly in elab_exp *)
 and elab_exp (exp : expr) (env : env_t) : exp =
   match exp with
+  | QsEEmp ->
+      EWld
   | QsEName (QUnqual (UIdent x)) ->
       EVar (MVar (Ident x))
-      (*FIXME: if ECall is a quantum op, things must be done differently here *)
-  | QsECall (func, es) -> (
-      let func' = elab_exp func env in
-      match es with
-      | [QsETp es'] ->
-          elab_app func' es env (* deals with weird uncurried case *)
-      | _ ->
-          elab_app func' es env )
-  | QsEEq (e1, e2) ->
-      EEql (elab_exp e1 env, elab_exp e2 env)
-  | QsEAdd (e1, e2) ->
-      EAdd (elab_exp e1 env, elab_exp e2 env)
-  | QsEArr es ->
-      EArrC
-        (TDummy, EInt (List.length es), List.map (fun e -> elab_exp e env) es)
+  | QsENameT _ ->
+      failwith "TODO: QsENameT"
+  | QsEInt (Integ i) ->
+      EInt (int_of_string i)
+  | QsEBInt (BigInt i) ->
+      EInt (int_of_string i) (*FIXME: should this also just be int? *)
+  | QsEDbl (Doubl i) ->
+      EDbl (float_of_string i)
+  | QsEStr str ->
+      EStr str
+  | QsEStrI str ->
+      EStr str
+  | QsEBool BTru ->
+      ETrue
+  | QsEBool BFls ->
+      EFls
+  | QsERes ROne ->
+      ETrue
+  | QsERes RZero ->
+      EFls
+  | QsEPli _ ->
+      failwith "TODO: QsEPli"
   | QsETp [e] ->
       (* FIXME: like below in elab type, this maybe should be illegal, but can just turn to normal exp *)
       elab_exp e env
@@ -418,19 +427,70 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       EPair (typeof (Left e1') env, typeof (Left e2') env, e1', e2')
   | QsETp _ ->
       failwith "only 2-ples are accepted"
-  | QsEStr str ->
-      EStr str
-  | QsEStrI str ->
-      EStr str
-  | QsEEmp ->
-      EWld
-  | QsEBool BTru ->
-      ETrue
-  | QsEBool BFls ->
-      EFls
-  (* Is this correct? Why the type mismatch? *)
-  | QsEInt (Integ i) ->
-      EInt (int_of_string i)
+  | QsEArr es ->
+      EArrC
+        (TDummy, EInt (List.length es), List.map (fun e -> elab_exp e env) es)
+  | QsESArr _ ->
+      failwith
+        "TODO: QsESArr" (*should we just translate this syntactic sugar? *)
+  | QsEItem _ ->
+      failwith
+        "TODO: QsEItem" (*should we just translate this syntactic sugar? *)
+  | QsEUnwrap _ ->
+      failwith "TODO: QsEUnwrap"
+  | QsEIndex (lis, num) ->
+      let lis' = elab_exp lis env in
+      let num' = elab_exp num env in
+      if typeof (Left num') env == TInt then EArrI (TInt, lis', num')
+      else failwith "must index into list with int - type mismatch"
+  | QsECtrl _ ->
+      failwith "TODO: QsECtrl"
+  | QsEAdj _ ->
+      failwith "TODO: QsEAdj"
+      (*FIXME: if ECall is a quantum op, things must be done differently here *)
+  | QsECall (func, es) -> (
+      let func' = elab_exp func env in
+      match es with
+      | [QsETp es'] ->
+          elab_app func' es env (* deals with weird uncurried case *)
+      | _ ->
+          elab_app func' es env )
+  | QsEPos _ ->
+      failwith "TODO: QsEPos"
+  | QsENeg _ ->
+      failwith "TODO: QsENeg"
+  | QsELNot e ->
+      ENot (elab_exp e env)
+  | QsEBNot _ ->
+      failwith "TODO: QsEBNot"
+  | QsEPow (e1, e2) ->
+      EPow (elab_exp e1 env, elab_exp e2 env)
+  | QsEMul (e1, e2) ->
+      EMul (elab_exp e1 env, elab_exp e2 env)
+  | QsEDiv (e1, e2) ->
+      EDiv (elab_exp e1 env, elab_exp e2 env)
+  | QsEMod (e1, e2) ->
+      EMod (elab_exp e1 env, elab_exp e2 env)
+  | QsEAdd (e1, e2) ->
+      EAdd (elab_exp e1 env, elab_exp e2 env)
+  | QsESub (e1, e2) ->
+      ESub (elab_exp e1 env, elab_exp e2 env)
+  | QsEShiftR _ ->
+      failwith "TODO: QsEShiftR"
+  | QsEShiftL _ ->
+      failwith "TODO: QsEShiftL"
+  | QsEGt (e1, e2) ->
+      EGt (elab_exp e1 env, elab_exp e2 env)
+  | QsEGte (e1, e2) ->
+      EGte (elab_exp e1 env, elab_exp e2 env)
+  | QsELt (e1, _, e2) ->
+      ELt (elab_exp e1 env, elab_exp e2 env)
+  | QsELte (e1, _, e2) ->
+      ELte (elab_exp e1 env, elab_exp e2 env)
+  | QsEEq (e1, e2) ->
+      EEql (elab_exp e1 env, elab_exp e2 env)
+  | QsENeq (e1, e2) ->
+      ENEql (elab_exp e1 env, elab_exp e2 env)
   | x ->
       failwith (unimplemented_error (ShowQSharp.show (ShowQSharp.showExpr x)))
 

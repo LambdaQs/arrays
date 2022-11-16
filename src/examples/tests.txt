@@ -63,3 +63,52 @@ BScope (Scp ([SRet
  ECall (EName (QUnqual (UIdent "Mapped")), [EName (QUnqual (UIdent "predicate"));
 
 EName (QUnqual (UIdent "array"))])]))]))))])])
+
+
+
+
+
+
+
+Elaboration for All.qs:
+
+[Input abstract syntax]
+
+Prog ([NDec (QQual (QIdent "Microsoft.Quantum.Arrays"), [NSOp (QQual (QIdent "Microsoft.Quantum.Logical")); NSClbl (DPrefix ([], AEmpty), CDFun (UIdent "All", TAList ([TIdent "'T"]), ParTpl ([ParNI (NItem (UIdent "predicate", TpTpl ([TpFun (TpPar (TIdent "'T"), TpBool)]))); ParNI (NItem (UIdent "array", TpArr (TpPar (TIdent "'T"))))]), TpBool, BScope (Scp ([SRet (QsECall (QsEName (QUnqual (UIdent "Fold")), [QsEName (QUnqual (UIdent "And")); QsEBool (BTru); QsECall (QsEName (QUnqual (UIdent "Mapped")), [QsEName (QUnqual (UIdent "predicate")); QsEName (QUnqual (UIdent "array"))])]))]))))])])
+
+[Output abstract syntax]
+
+ELet (TFun (TFun (TTVar (MTVar (Ident "'T")), TBool), TFun (TArr (TTVar (MTVar (Ident "'T"))), TBool)), TDummy, ELam (TFun (TTVar (MTVar (Ident "'T")), TBool), TFun (TArr (TTVar (MTVar (Ident "'T"))), TBool), MVar (Ident "predicate"), ELam (TArr (TTVar (MTVar (Ident "'T"))), TBool, MVar (Ident "array"), EAp (TDummy, TDummy, EAp (TDummy, TDummy, EAp (TDummy, TDummy, EVar (MVar (Ident "Fold")), EVar (MVar (Ident "And"))), ETrue), EAp (TDummy, TDummy, EAp (TDummy, TDummy, EVar (MVar (Ident "Mapped")), EVar (MVar (Ident "predicate"))), EVar (MVar (Ident "array")))))), MVar (Ident "All"), ETriv)
+
+
+
+
+
+Elaboration for TyVarLambdaTest.qs
+
+For input, just look at code itself, it will be more clear.
+The uncurrying makes the functions very complicated.
+Also, types are everywhere and repeated a lot.
+
+
+[Output abstract syntax]
+
+ELet
+	(TFun (TFun (TTVar (MTVar (Ident "'T")), TBool), TFun (TArr (TTVar (MTVar (Ident "'T"))), TBool)),
+	TDummy,
+	ELam (TFun (TTVar (MTVar (Ident "'T")), TBool), TFun (TArr (TTVar (MTVar (Ident "'T"))), TBool), MVar (Ident "predicate"), ELam (TArr (TTVar (MTVar (Ident "'T"))), TBool, MVar (Ident "array"), EAp (TDummy, TDummy, EAp (TDummy, TDummy, EAp (TDummy, TDummy, EVar (MVar (Ident "Fold")), EVar (MVar (Ident "And"))), ETrue), EAp (TDummy, TDummy, EAp (TDummy, TDummy, EVar (MVar (Ident "Mapped")), EVar (MVar (Ident "predicate"))), EVar (MVar (Ident "array")))))),
+	MVar (Ident "All"),
+
+	ELet
+		(TFun (TInt, TBool),
+		TDummy,
+		ELam (TInt, TBool, MVar (Ident "a"), EGt (EVar (MVar (Ident "a")), EInt (0))),
+		MVar (Ident "simple_fun"),
+
+		ELet
+			(TFun (TStr, TBool),
+			TDummy,
+			ELam (TStr, TBool, MVar (Ident "input"), ELet (TDummy, TDummy, EArrC (TDummy, EInt (6), [EInt (0); EInt (1); EInt (2); EInt (3); EInt (4); EInt (5)]), MVar (Ident "sample"), EAp (TDummy, TDummy, EAp (TDummy, TDummy, EVar (MVar (Ident "All")), EVar (MVar (Ident "simple_fun"))), EVar (MVar (Ident "sample"))))),
+			MVar (Ident "main"),
+
+			ETriv)))
