@@ -50,7 +50,6 @@ EDiv.  Exp ::= "div"     "(" Exp ";" Exp ")";
 EMod.  Exp ::= "mod"     "(" Exp ";" Exp ")";
 EAdd.  Exp ::= "plus"    "(" Exp ";" Exp ")";
 ESub.  Exp ::= "minus"   "(" Exp ";" Exp ")";
-EAdd.  Exp ::= "plus"    "(" Exp ";" Exp ")";
 EGt.   Exp ::= "great"   "(" Exp ";" Exp ")";
 EGte.  Exp ::= "greateq" "(" Exp ";" Exp ")";
 ELt.   Exp ::= "less"    "(" Exp ";" Exp ")";
