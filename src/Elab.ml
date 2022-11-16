@@ -518,7 +518,9 @@ let elab_main () =
     print_string
       ( "[Output abstract syntax]\n\n"
       ^ (fun x -> ShowLambdaQs.show (ShowLambdaQs.showExp x)) out_ast
-      ^ "\n\n" )
+      ^ "\n\n[Linearized tree]\n\n"
+      ^ PrintLambdaQs.printTree PrintLambdaQs.prtExp out_ast
+      ^ "\n" )
 ;;
 
 elab_main ()
