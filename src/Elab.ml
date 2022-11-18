@@ -138,7 +138,15 @@ and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) :
     typ * exp =
   match params with
   | [] ->
-      failwith (unimplemented_error "Empty parameter list")
+      let typ' = TUnit in
+      let ty_body, pbody = elab_body body env in
+      let rettyp' = elab_type rettyp env in
+      ( TFun (typ', rettyp')
+      , ELam
+          ( typ'
+          , rettyp'
+          , wild_var (* TODO: might want to make this argument optional *)
+          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
   | [ParNI (NItem (UIdent arg, typ))] ->
       (* if typ is TQbit, have to do smth entirely different so this gets a bit annoying *)
       let typ', env' = prep_param arg typ env in
