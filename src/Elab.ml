@@ -300,7 +300,7 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
           let qtype = TQref (MKey (Ident (string_of_int i))) in
           let qrefs' = Strmap.add var i env.qrefs in
           let vars' = Strmap.add var qtype env.vars in
-          let env' = {env with qalls= qrefs'; vars= vars'} in
+          let env' = {env with qrefs= qrefs'; vars= vars'} in
           let s = elab_stmts stms' env' in
           match s with
           | Left e_s ->
