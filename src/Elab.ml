@@ -287,9 +287,24 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
       | BndWild ->
           failwith "Must bind Qubit to a variable"
           (* TODO: should this be an error? *)
-      | BndName (UIdent var) ->
-          failwith
-            (unimplemented_error (ShowQSharp.show (ShowQSharp.showBnd bnd)))
+      | BndName (UIdent var) -> (
+          let i = cardinal env.qrefs in
+          let qtype = TQref (MKey (Ident (string_of_int i))) in
+          let qrefs' = Strmap.add var i env.qrefs in
+          let vars' = Strmap.add var qtype env.vars in
+          let env' = {env with qalls= qrefs'; vars= vars'} in
+          let s = elab_stmts stms' env' in
+          match s with
+          | Left e_s ->
+              failwith "expected command, got exp"
+          | Right m_s ->
+              Right
+                (CBnd
+                   ( qtype
+                   , typeof s env'
+                   , EQloc (MKey (Ident (string_of_int i)))
+                   , MVar (Ident var)
+                   , m_s ) ) )
       | BndTplA bnds ->
           failwith "mismatch in number of binds" )
     | QInitA num ->
