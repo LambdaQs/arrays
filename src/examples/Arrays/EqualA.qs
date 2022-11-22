@@ -47,13 +47,6 @@ namespace Microsoft.Quantum.Arrays {
     /// }
     /// ```
     ///
-
-
-    // Added to test typeof checking types of functions
-    // function All<'T> (predicate : ('T -> Bool), array : 'T[]) : Bool {
-    //    return Fold(And, true, Mapped(predicate, array));
-    // }
-
     function EqualA<'T>(equal : (('T, 'T) -> Bool), array1 : 'T[], array2 : 'T[]) : Bool {
         if (Length(array1) != Length(array2)) {
             return false;

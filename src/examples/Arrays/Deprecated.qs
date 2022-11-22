@@ -111,7 +111,7 @@ namespace Microsoft.Quantum.Preparation {
     /// ## qubit
     /// A qubit to be prepared.
     @Deprecated("Microsoft.Quantum.Preparation.PreparePauliEigenstate")
-    operation PrepareQubit(basis : Pauli, qubit : qall<'k>) : Unit {
+    operation PrepareQubit(basis : Pauli, qubit : Qubit) : Unit {
         PreparePauliEigenstate(basis, qubit);
     }
 
