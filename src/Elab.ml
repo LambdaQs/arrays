@@ -38,7 +38,16 @@ type env_t =
 (* FIXME: dummy implementation!! *)
 (* JZ: what type is term here? Im assuming its an LQS expression *)
 (* Kartik: that's right! We are calling `typeof` after elaborating Q# expressions *)
-let typeof (term : lqsterm) (env : env_t) : typ = TDummy
+let typeof (term : lqsterm) (env : env_t) : typ =
+  match term with
+  | Left (EVar (MVar (Ident var_name))) -> (
+    match Strmap.find_opt var_name env.vars with
+    | None ->
+        TDummy (*FIXME: should eventually be an error? *)
+    | Some t ->
+        t )
+  | _ ->
+      TDummy
 
 (* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
 let rec extract_ifs (stmts : stm list) : stm list * stm list =
@@ -53,18 +62,33 @@ let rec extract_ifs (stmts : stm list) : stm list * stm list =
 
 (* given two LQS types, returns the combined type or returns error if there is a problem *)
 (* since things may be void, I made a helper for this *)
-(* TODO: figure out what to do with TQRef here *)
-let combine_types (ty1 : typ) (ty2 : typ) : typ =
+(* TODO: figure out what to do with TQRef and TQAll here *)
+let rec combine_types (ty1 : typ) (ty2 : typ) : typ =
   match (ty1, ty2) with
+  (* TODO: eventually, TDummy should not be allowed here *)
   | TDummy, _ ->
       ty2
-      (* FIXME: but sometimes void should take precidence like in a simple if statement? *)
   | _, TDummy ->
       ty1
+  | TTVar tvar1, TTVar tvar2 ->
+      if tvar1 == tvar2 then ty1 else failwith "type variable mismatch"
   | TQref _, TQref _ ->
       ty1
+  | TQAll _, TQAll _ ->
+      ty1
+  | TFun (in1, ou1), TFun (in2, ou2) ->
+      TFun (combine_types in1 in2, combine_types ou1 ou2)
+  | TAll (tv1, ou1), TAll (tv2, ou2) ->
+      if tv1 == tv2 then TAll (tv1, combine_types ou1 ou2)
+      else failwith "type variable mismatch"
+  | TCmd t1, TCmd t2 ->
+      TCmd (combine_types t1 t2)
+  | TProd (l1, r1), TFun (l2, r2) ->
+      TProd (combine_types l1 l2, combine_types r1 r2)
+  | TArr t1, TArr t2 ->
+      TArr (combine_types t1 t2)
   | _ ->
-      if ty1 == ty2 then ty1 else failwith "Branches have different types"
+      if ty1 == ty2 then ty1 else failwith "type mismatch"
 
 (* elab takes in the the program and the environment composed of the
    signature and context *)
@@ -104,6 +128,7 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : exp =
           let env' = {env with vars= vars'} in
           let m = elab_nselmts elmts env' in
           (*FIXME: do we want the final type here? or the type of the entire function f *)
+          (* JZ: right now, its the entire type which seems correct *)
           ELet (ty_body, typeof (Left m) env', body, f, m) )
 (*FIXME: pretty sure m will always typecheck to unit?*)
 
@@ -129,8 +154,17 @@ and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
   | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) ->
       let rettyp', body' = curry params rettyp body env in
       (MVar (Ident name), rettyp', body')
-  | _ ->
-      failwith (unimplemented_error "operation with type parameters")
+  | CDOp (UIdent name, TAList tvars, ParTpl params, rettyp, _, body) ->
+      let tvars' =
+        fold_left
+          (fun a b ->
+            let (TIdent bstr) = b in
+            Strmap.add bstr (TTVar (MTVar (Ident bstr))) a )
+          env.tvars tvars
+      in
+      let env' = {env with tvars= tvars'} in
+      let rettyp', body' = curry params rettyp body env' in
+      (MVar (Ident name), rettyp', body')
 
 (* NOTE: curry returns a type here since it's pretty easy to get the type of the curried
    function, possibly easier than to use typeof? *)
@@ -360,38 +394,36 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
       let cond' = elab_exp cond env in
       let s1 = elab_stmts stmts1 env in
       let s2 = elab_stmts stmts2 env in
+      let t1 = typeof s1 env in
+      let t2 = typeof s2 env in
       match (s1, s2) with
       | Left e1, Left e2 ->
-          if typeof s1 env == typeof s2 env then
-            EIte (typeof s1 env, cond', e1, e2)
-          else failwith "branches cannot be different types"
+          EIte (combine_types t1 t2, cond', e1, e2)
       | Right m1, Right m2 ->
-          if typeof s1 env == typeof s2 env then
-            EIte
-              ( typeof s1 env
-              , cond'
-              , ECmd (typeof s1 env, m1)
-              , ECmd (typeof s2 env, m2) )
-          else failwith "branches cannot be different types"
+          EIte
+            ( combine_types t1 t2
+            , ( if typeof (Left cond') env == TBool then cond'
+              else failwith "expected bool, different type present" )
+            , ECmd (t1, m1)
+            , ECmd (t2, m2) )
       | _ ->
           failwith "branches cannot be different types" )
   | [SEIf (cond, Scp stmts1); SElse (Scp stmts2)] -> (
       let cond' = elab_exp cond env in
       let s1 = elab_stmts stmts1 env in
       let s2 = elab_stmts stmts2 env in
+      let t1 = typeof s1 env in
+      let t2 = typeof s2 env in
       match (s1, s2) with
       | Left e1, Left e2 ->
-          if typeof s1 env == typeof s2 env then
-            EIte (typeof s1 env, cond', e1, e2)
-          else failwith "branches cannot be different types"
+          EIte (combine_types t1 t2, cond', e1, e2)
       | Right m1, Right m2 ->
-          if typeof s1 env == typeof s2 env then
-            EIte
-              ( typeof s1 env
-              , cond'
-              , ECmd (typeof s1 env, m1)
-              , ECmd (typeof s2 env, m2) )
-          else failwith "branches cannot be different types"
+          EIte
+            ( combine_types t1 t2
+            , ( if typeof (Left cond') env == TBool then cond'
+              else failwith "expected bool, different type present" )
+            , ECmd (t1, m1)
+            , ECmd (t2, m2) )
       | _ ->
           failwith "branches cannot be different types" )
   | SIf (cond, Scp stmts1) :: stmts' -> (
