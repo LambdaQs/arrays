@@ -131,6 +131,7 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : exp =
           (* JZ: right now, its the entire type which seems correct *)
           ELet (ty_body, typeof (Left m) env', body, f, m) )
 (*FIXME: pretty sure m will always typecheck to unit?*)
+(*JZ: we say let f = ..body.. in ..m.., so the type of m may have nothing to do with f *)
 
 and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
   match calld with
@@ -186,11 +187,11 @@ and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) :
       let typ', env' = prep_param arg typ env in
       let ty_body, pbody = elab_body body env' in
       let rettyp' = elab_type rettyp env in
-      (*TODO: should we be checking ty_body against rettyp'? *)
-      ( TFun (typ', rettyp')
+      ( TFun (typ', combine_types rettyp' ty_body)
+        (* note that we check ty_body against rettyp' *)
       , ELam
           ( typ'
-          , rettyp' (*TODO: per above, rettyp' could also be ty_body? *)
+          , rettyp'
           , MVar (Ident arg)
           , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
   | ParNI (NItem (UIdent arg, typ)) :: t ->
@@ -211,8 +212,14 @@ and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
       let vars' = Strmap.add arg qtype env.vars in
       let env' = {env with qalls= qalls'; vars= vars'} in
       (qtype, env')
-      (*FIXME: if type is Qubit[n], should be more like first branch?
-          Not really sure what to do here. *)
+      (* Note that we basically do the same thing for lists of qubits as qubits *)
+  | TpArr TpQbit ->
+      let i = cardinal env.qalls in
+      let qlisttype = TArr (TQAll (MKVar (Ident (string_of_int i)))) in
+      let qalls' = Strmap.add arg i env.qalls in
+      let vars' = Strmap.add arg qlisttype env.vars in
+      let env' = {env with qalls= qalls'; vars= vars'} in
+      (qlisttype, env')
   | _ ->
       let argtyp' = elab_type argtyp env in
       let vars' = Strmap.add arg argtyp' env.vars in
@@ -403,6 +410,7 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
           EIte
             ( combine_types t1 t2
             , ( if typeof (Left cond') env == TBool then cond'
+                (*TODO: make sure we should be checking this here! *)
               else failwith "expected bool, different type present" )
             , ECmd (t1, m1)
             , ECmd (t2, m2) )
@@ -429,29 +437,31 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
   | SIf (cond, Scp stmts1) :: stmts' -> (
       let cond' = elab_exp cond env in
       let s1 = elab_stmts stmts1 env in
+      let t1 = typeof s1 env in
       let stmts'' = elab_ite stmts' env in
       match s1 with
       | Left e1 ->
-          if typeof s1 env == typeof (Left stmts'') env then
-            EIte (typeof s1 env, cond', e1, stmts'')
-          else failwith "branches cannot be different types"
+          EIte (combine_types t1 (typeof (Left stmts'') env), cond', e1, stmts'')
       | Right m1 ->
-          if typeof s1 env == typeof (Left stmts'') env then
-            EIte (typeof s1 env, cond', ECmd (typeof s1 env, m1), stmts'')
-          else failwith "branches cannot be different types" )
+          EIte
+            ( combine_types t1 (typeof (Left stmts'') env)
+            , cond'
+            , ECmd (t1, m1)
+            , stmts'' ) )
   | SEIf (cond, Scp stmts1) :: stmts' -> (
       let cond' = elab_exp cond env in
       let s1 = elab_stmts stmts1 env in
+      let t1 = typeof s1 env in
       let stmts'' = elab_ite stmts' env in
       match s1 with
       | Left e1 ->
-          if typeof s1 env == typeof (Left stmts'') env then
-            EIte (typeof s1 env, cond', e1, stmts'')
-          else failwith "branches cannot be different types"
+          EIte (combine_types t1 (typeof (Left stmts'') env), cond', e1, stmts'')
       | Right m1 ->
-          if typeof s1 env == typeof (Left stmts'') env then
-            EIte (typeof s1 env, cond', ECmd (typeof s1 env, m1), stmts'')
-          else failwith "branches cannot be different types" )
+          EIte
+            ( combine_types t1 (typeof (Left stmts'') env)
+            , cond'
+            , ECmd (t1, m1)
+            , stmts'' ) )
   | _ ->
       failwith "Unexpected case in ITE translation"
 
