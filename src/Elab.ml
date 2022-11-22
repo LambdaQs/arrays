@@ -216,6 +216,7 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
   (* this one is strightforward, just return the exp *)
   | SRet exp :: _ ->
       Left (elab_exp exp env)
+      (*FIXME: in an operaton, this should be a command *)
       (* TODO: should things after return statement be ignored? *)
   | SFail exp :: stmts' ->
       failwith (unimplemented_error "(SFail)")
@@ -309,7 +310,13 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
           let s = elab_stmts stms' env' in
           match s with
           | Left e_s ->
-              failwith "expected command, got exp"
+              Right
+                (CBnd
+                   ( qtype
+                   , typeof s env'
+                   , EQloc (MKey (Ident (string_of_int i)))
+                   , MVar (Ident var)
+                   , CRet (typeof s env, e_s) ) )
           | Right m_s ->
               Right
                 (CBnd
@@ -577,11 +584,11 @@ and elab_type (typ : tp) (env : env_t) : typ =
   (* TODO: should send to Qref, but what should the key be? *)
   | TpQbit ->
       (* given polymorphic key *)
-      failwith (unimplemented_error "(TQbit)")
+      failwith (unimplemented_error "(TpQbit)")
   | TpRng ->
-      failwith (unimplemented_error "(TRng)")
+      failwith (unimplemented_error "(TpRng)")
   | TpRes ->
-      failwith (unimplemented_error "(TRes)")
+      failwith (unimplemented_error "(TpRes)")
   | TpStr ->
       TStr
   | TpUnit ->

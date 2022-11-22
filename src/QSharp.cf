@@ -165,7 +165,7 @@ separator nonempty Bnd ",";
 QBnd. QbitBnd ::= Bnd "=" QbitInit;
 
 QInitS. QbitInit ::= "Qubit" "(" ")";
-QInitA. QbitInit ::= "Qubit" "[" Expr "]";
+QInitA. QbitInit ::= "Qubit" "[" Expr "]";  --makes an array of qubits
 QInitT. QbitInit ::= "(" [QbitInit] ")";
 
 separator QbitInit ",";

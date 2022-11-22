@@ -10,7 +10,6 @@ namespace Microsoft.Quantum.Arrays {
         return (a > 0);
     }
 
-
     function main (input : String) : Bool {
         let sample = [0,1,2,3,4,5];
         return All(simple_fun, sample);
