@@ -187,6 +187,11 @@ and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
 
 and elab_body (body : body) (env : env_t) : typ * lqsterm =
   match body with
+  | BSpec (SSpec (SNBody, SGIntr) :: _) ->
+      (TUnit, Left ETriv)
+  | BSpec (SSpec (SNBody, SGImpl (_, Scp stmts)) :: _) ->
+      let scope = elab_stmts stmts env in
+      (typeof scope env, scope)
   | BSpec _ ->
       failwith (unimplemented_error "Specializations (BSpec)")
   | BScope (Scp stmts) ->

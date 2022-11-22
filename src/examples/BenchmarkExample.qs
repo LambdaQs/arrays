@@ -1,17 +1,6 @@
 
 namespace LambdaQs.Arrays {
 
-    function IndexRange<'TElement>(array : 'TElement[]) : Range {
-       return 0..(Length(array) - 1);
-    }
-
-    operation ApplyToEachCA<'T> (singleElementOperation : ('T => Unit is Adj + Ctl), register : 'T[])
-    : Unit is Adj + Ctl {
-        for idxQubit in IndexRange(register) {
-            singleElementOperation(register[idxQubit]);
-        }
-    }
-
     operation X (qubit : Qubit) : Unit is Adj + Ctl {
         body intrinsic;
         adjoint self;
@@ -22,6 +11,14 @@ namespace LambdaQs.Arrays {
             Controlled X([control], target);
         }
         adjoint self;
+    }
+
+    function Most<'T> (array : 'T[]) : 'T[] {
+        return array[... Length(array) - 2];
+    }
+
+    function Rest<'T> (array : 'T[]) : 'T[] {
+        return array[1 ...];
     }
 
     function Zipped<'T, 'U>(left : 'T[], right : 'U[]) : ('T, 'U)[] {
@@ -42,12 +39,15 @@ namespace LambdaQs.Arrays {
         return output;
     }
 
-    function Rest<'T> (array : 'T[]) : 'T[] {
-        return array[1 ...];
+    function IndexRange<'TElement>(array : 'TElement[]) : Range {
+       return 0..(Length(array) - 1);
     }
 
-    function Most<'T> (array : 'T[]) : 'T[] {
-        return array[... Length(array) - 2];
+    operation ApplyToEachCA<'T> (singleElementOperation : ('T => Unit is Adj + Ctl), register : 'T[])
+    : Unit is Adj + Ctl {
+        for idxQubit in IndexRange(register) {
+            singleElementOperation(register[idxQubit]);
+        }
     }
 
     operation ApplyCNOTChain(qubits : Qubit[]) : Unit is Adj + Ctl {
