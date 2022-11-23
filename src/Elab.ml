@@ -577,6 +577,21 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       EEql (elab_exp e1 env, elab_exp e2 env)
   | QsENeq (e1, e2) ->
       ENEql (elab_exp e1 env, elab_exp e2 env)
+  | QsECond (cond, e1, e2) ->
+      let e1' = elab_exp e1 env in
+      let e2' = elab_exp e2 env in
+      let t1 = typeof (Left e1') env in
+      let t2 = typeof (Left e2') env in
+      if t1 == t2 then EIte (t1, elab_exp cond env, e1', e2')
+      else failwith "Type error: QsECond"
+  | QsERange (l, r) ->
+      failwith (unimplemented_error "QsERange")
+  | QsERangeR l ->
+      failwith (unimplemented_error "QsERangeR")
+  | QsERangeL r ->
+      failwith (unimplemented_error "QsERangeL")
+  | QsERangeLR ->
+      failwith (unimplemented_error "QsERangeLR")
   | x ->
       failwith (unimplemented_error (ShowQSharp.show (ShowQSharp.showExpr x)))
 
