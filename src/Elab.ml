@@ -229,7 +229,7 @@ and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
 and elab_body (body : body) (env : env_t) : typ * lqsterm =
   match body with
   | BSpec (SSpec (SNBody, SGIntr) :: _) ->
-      (TUnit, Left ETriv)
+      (TUnit, Left ETriv) (* TODO: add intrinsic unitary to environment? *)
   | BSpec (SSpec (SNBody, SGImpl (_, Scp stmts)) :: _) ->
       let scope = elab_stmts stmts env in
       (typeof scope env, scope)
@@ -465,8 +465,8 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
   | _ ->
       failwith "Unexpected case in ITE translation"
 
-(* Note: should not worry too much about calling quantum things exp's, quantum things will be
-   encapsulated accordingly in elab_exp *)
+(* Note: should not worry too much about calling quantum things exp's,
+   quantum things will be encapsulated accordingly in elab_exp *)
 and elab_exp (exp : expr) (env : env_t) : exp =
   match exp with
   | QsEEmp ->
@@ -521,10 +521,19 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       if typeof (Left num') env == TInt then EArrI (TInt, lis', num')
       else failwith "must index into list with int - type mismatch"
   | QsECtrl _ ->
-      failwith "TODO: QsECtrl"
+      failwith "TODO: non-trivial Controlled functor"
   | QsEAdj _ ->
       failwith "TODO: QsEAdj"
-      (*FIXME: if ECall is a quantum op, things must be done differently here *)
+  | QsECall
+      ( QsECtrl (QsEName (QUnqual (UIdent "X")))
+      , QsEArr [QsEName (QUnqual (UIdent ctl))] :: [tgt] ) ->
+      ECmd
+        ( TUnit
+        , CDiag
+            ( MUni (Ident "I")
+            , MUni (Ident "X")
+            , EVar (MVar (Ident ctl))
+            , elab_exp tgt env ) )
   | QsECall (func, es) -> (
       let func' = elab_exp func env in
       match es with
