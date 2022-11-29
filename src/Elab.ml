@@ -233,6 +233,8 @@ and elab_body (body : body) (env : env_t) : typ * lqsterm =
   | BSpec (SSpec (SNBody, SGImpl (_, Scp stmts)) :: _) ->
       let scope = elab_stmts stmts env in
       (typeof scope env, scope)
+  | BSpec [] ->
+      (TUnit, Left ETriv)
   | BSpec _ ->
       failwith (unimplemented_error "Specializations (BSpec)")
   | BScope (Scp stmts) ->
@@ -585,11 +587,11 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       if t1 == t2 then EIte (t1, elab_exp cond env, e1', e2')
       else failwith "Type error: QsECond"
   | QsERange (l, r) ->
-      failwith (unimplemented_error "QsERange")
+      ERng (elab_exp l env, elab_exp r env)
   | QsERangeR l ->
-      failwith (unimplemented_error "QsERangeR")
+      ERngR (elab_exp l env)
   | QsERangeL r ->
-      failwith (unimplemented_error "QsERangeL")
+      ERngL (elab_exp r env)
   | QsERangeLR ->
       failwith (unimplemented_error "QsERangeLR")
   | x ->
