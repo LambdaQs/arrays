@@ -526,7 +526,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       failwith "TODO: non-trivial Controlled functor"
   | QsEAdj _ ->
       failwith "TODO: QsEAdj"
-  | QsECall
+  | QsECall (* TODO: This needs to be generalized *)
       ( QsECtrl (QsEName (QUnqual (UIdent "X")))
       , QsEArr [QsEName (QUnqual (UIdent ctl))] :: [tgt] ) ->
       ECmd
