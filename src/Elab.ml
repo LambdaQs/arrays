@@ -88,7 +88,13 @@ let rec combine_types (ty1 : typ) (ty2 : typ) : typ =
   | TArr t1, TArr t2 ->
       TArr (combine_types t1 t2)
   | _ ->
-      if ty1 == ty2 then ty1 else failwith "type mismatch"
+      if ty1 == ty2 then ty1
+      else
+        failwith
+          ( "type mismatch:\nty1: "
+          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty1)
+          ^ "\nty2: "
+          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty2) )
 
 (* elab takes in the the program and the environment composed of the
    signature and context *)
