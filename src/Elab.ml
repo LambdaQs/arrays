@@ -660,7 +660,7 @@ and elab_type (typ : tp) (env : env_t) : typ =
       (* given polymorphic key *)
       failwith (unimplemented_error "(TpQbit)")
   | TpRng ->
-      failwith (unimplemented_error "(TpRng)")
+      TRng
   | TpRes ->
       failwith (unimplemented_error "(TpRes)")
   | TpStr ->
