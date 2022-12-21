@@ -46,6 +46,10 @@ let typeof (term : lqsterm) (env : env_t) : typ =
         TDummy (*FIXME: should eventually be an error? *)
     | Some t ->
         t )
+  | Left (EArrC (ty, _, _)) ->
+      TArr ty
+  | Left ETriv ->
+      TUnit
   | _ ->
       TDummy
 
@@ -144,41 +148,33 @@ and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
   (* TODO: make sure only pure things happen inside functions, although qubits can still be passed *)
   (* TODO: add mechanism here to ensure that functions stay pure *)
   | CDFun (UIdent name, TAEmpty, ParTpl params, rettyp, body) ->
-      let rettyp', body' = curry params rettyp body env in
+      let rettyp', body' = curry [] params rettyp body env in
       (MVar (Ident name), rettyp', body')
   | CDFun (UIdent name, TAList tvars, ParTpl params, rettyp, body) ->
-      let tvars' =
-        fold_left
-          (fun a b ->
-            let (TIdent bstr) = b in
-            Strmap.add bstr (TTVar (MTVar (Ident bstr))) a )
-          env.tvars tvars
-      in
-      let env' = {env with tvars= tvars'} in
-      let rettyp', body' = curry params rettyp body env' in
+      let rettyp', body' = curry tvars params rettyp body env in
       (MVar (Ident name), rettyp', body')
   (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
   | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) ->
-      let rettyp', body' = curry params rettyp body env in
+      let rettyp', body' = curry [] params rettyp body env in
       (MVar (Ident name), rettyp', body')
   | CDOp (UIdent name, TAList tvars, ParTpl params, rettyp, _, body) ->
-      let tvars' =
-        fold_left
-          (fun a b ->
-            let (TIdent bstr) = b in
-            Strmap.add bstr (TTVar (MTVar (Ident bstr))) a )
-          env.tvars tvars
-      in
-      let env' = {env with tvars= tvars'} in
-      let rettyp', body' = curry params rettyp body env' in
+      let rettyp', body' = curry tvars params rettyp body env in
       (MVar (Ident name), rettyp', body')
 
 (* NOTE: curry returns a type here since it's pretty easy to get the type of the curried
    function, possibly easier than to use typeof? *)
-and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) :
-    typ * exp =
-  match params with
-  | [] ->
+and curry (tyvars : tIdent list) (params : param list) (rettyp : tp)
+    (body : body) (env : env_t) : typ * exp =
+  match (tyvars, params) with
+  | tv :: tvs, _ ->
+      (* note that these four lines are the 'prep_param' for tyvar. Much simpler, so no helper *)
+      let (TIdent tvstr) = tv in
+      let tv' = MTVar (Ident tvstr) in
+      let tvars' = Strmap.add tvstr (TTVar tv') env.tvars in
+      let env' = {env with tvars= tvars'} in
+      let cur_ty, cur = curry tvs params rettyp body env' in
+      (TAll (tv', cur_ty), ETLam (tv', cur_ty, tv', cur))
+  | [], [] ->
       let typ' = TUnit in
       let ty_body, pbody = elab_body body env in
       let rettyp' = elab_type rettyp env in
@@ -188,7 +184,7 @@ and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) :
           , rettyp'
           , wild_var (* TODO: might want to make this argument optional *)
           , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
-  | [ParNI (NItem (UIdent arg, typ))] ->
+  | [], [ParNI (NItem (UIdent arg, typ))] ->
       (* if typ is TQbit, have to do smth entirely different so this gets a bit annoying *)
       let typ', env' = prep_param arg typ env in
       let ty_body, pbody = elab_body body env' in
@@ -200,11 +196,11 @@ and curry (params : param list) (rettyp : tp) (body : body) (env : env_t) :
           , rettyp'
           , MVar (Ident arg)
           , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
-  | ParNI (NItem (UIdent arg, typ)) :: t ->
+  | [], ParNI (NItem (UIdent arg, typ)) :: t ->
       let typ', env' = prep_param arg typ env in
-      let cur_ty, cur = curry t rettyp body env' in
+      let cur_ty, cur = curry [] t rettyp body env' in
       (TFun (typ', cur_ty), ELam (typ', cur_ty, MVar (Ident arg), cur))
-  | _ ->
+  | [], _ ->
       failwith (unimplemented_error "Nested paramss (ParNIA)")
 
 (* preps the param, to be used in curry *)
@@ -294,9 +290,13 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
         failwith (unimplemented_error "list binds") )
   (* TODO: what differentiates SLet, SMut, and SSet? *)
   | SMut (bnd, exp) :: stmts' ->
-      failwith (unimplemented_error "SMut")
+      elab_stmts
+        (SLet (bnd, exp) :: stmts')
+        env (*FIXME: make this specific to Mut *)
   | SSet (bnd, exp) :: stmts' ->
-      failwith (unimplemented_error "SSet")
+      elab_stmts
+        (SLet (bnd, exp) :: stmts')
+        env (*FIXME: make this specific to Set *)
   | SSetOp (UIdent arg, sOp, exp) :: stmts' ->
       failwith (unimplemented_error "SSetOp")
   | SSetW (UIdent arg, exp1, larr, exp2) :: stmts' ->
@@ -512,9 +512,14 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       EPair (typeof (Left e1') env, typeof (Left e2') env, e1', e2')
   | QsETp _ ->
       failwith "only 2-ples are accepted"
-  | QsEArr es ->
-      EArrC
-        (TDummy, EInt (List.length es), List.map (fun e -> elab_exp e env) es)
+  | QsEArr es -> (
+    match es with
+    | [] ->
+        EArrC (TUnit, EInt 0, [])
+    | e :: es' ->
+        let ty = typeof (Left (elab_exp e env)) env in
+        EArrC (ty, EInt (List.length es), List.map (fun e -> elab_exp e env) es)
+    )
   | QsESArr _ ->
       failwith
         "TODO: QsESArr" (*should we just translate this syntactic sugar? *)
@@ -523,11 +528,25 @@ and elab_exp (exp : expr) (env : env_t) : exp =
         "TODO: QsEItem" (*should we just translate this syntactic sugar? *)
   | QsEUnwrap _ ->
       failwith "TODO: QsEUnwrap"
-  | QsEIndex (lis, num) ->
+  | QsEIndex (lis, ind) -> (
       let lis' = elab_exp lis env in
-      let num' = elab_exp num env in
-      if typeof (Left num') env == TInt then EArrI (TInt, lis', num')
-      else failwith "must index into list with int - type mismatch"
+      let ind' = elab_exp ind env in
+      match typeof (Left lis') env with
+      | TArr ty -> (
+        (*TODO: is this correct? We can index into a list with a range, so should be something like this *)
+        match ind' with
+        | ERng _ ->
+            EArrI (TArr ty, lis', ind')
+        | ERngR _ ->
+            EArrI (TArr ty, lis', ind')
+        | ERngL _ ->
+            EArrI (TArr ty, lis', ind')
+        | EInt _ ->
+            EArrI (ty, lis', ind')
+        | _ ->
+            failwith "incorrect type for indexing into a list" )
+      | _ ->
+          failwith "expected list type" )
   | QsECtrl _ ->
       failwith "TODO: non-trivial Controlled functor"
   | QsEAdj _ ->
