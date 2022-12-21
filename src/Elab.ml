@@ -50,6 +50,10 @@ let typeof (term : lqsterm) (env : env_t) : typ =
       TArr ty
   | Left ETriv ->
       TUnit
+  | Left (EInt _) ->
+      TInt
+  | Left (EIte (ty, _, _, _)) ->
+      ty
   | _ ->
       TDummy
 
@@ -520,9 +524,16 @@ and elab_exp (exp : expr) (env : env_t) : exp =
         let ty = typeof (Left (elab_exp e env)) env in
         EArrC (ty, EInt (List.length es), List.map (fun e -> elab_exp e env) es)
     )
-  | QsESArr _ ->
-      failwith
-        "TODO: QsESArr" (*should we just translate this syntactic sugar? *)
+  | QsESArr (elem, _, num) -> (
+      let elem' = elab_exp elem env in
+      let num' = elab_exp num env in
+      match typeof (Left num') env with
+      | TInt ->
+          EArrS (typeof (Left elem') env, num', elem')
+      | TDummy ->
+          EArrS (typeof (Left elem') env, num', elem')
+      | _ ->
+          failwith "must repeat elem with int" )
   | QsEItem _ ->
       failwith
         "TODO: QsEItem" (*should we just translate this syntactic sugar? *)
