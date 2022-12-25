@@ -22,6 +22,7 @@ TUnit.  Typ ::= "tunit";
 TBool.  Typ ::= "tbool";
 TStr.   Typ ::= "tstr";
 TInt.   Typ ::= "tint";
+TDbl.   Typ ::= "tdouble";
 TDummy. Typ ::= "tdummy";
 
 --FIXME: reorder these to be closer to Qsharp grammar

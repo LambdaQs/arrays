@@ -85,57 +85,51 @@ let typeof (term : lqsterm) (env : env_t) : typ =
       TArr ty
   | Left (EArrS (ty, _, _)) ->
       TArr ty
-  | Left (EArrL _) ->
-      TInt
   (* this is all already setup in elab_exp below, so just returning ty suffices *)
   | Left (EArrI (ty, lis, ind)) ->
       ty
+  | Left (EArrL _) ->
+      TInt
+  | Left (EPow _) ->
+      TInt
+  | Left (EMul _) ->
+      TInt
+  | Left (EDiv _) ->
+      TInt
+  | Left (EMod _) ->
+      TInt
+  | Left (EAdd _) ->
+      TInt
+  | Left (ESub _) ->
+      TInt
+  | Left (EGt _) ->
+      TBool
+  | Left (EGte _) ->
+      TBool
+  | Left (ELt _) ->
+      TBool
+  | Left (ELte _) ->
+      TBool
+  | Left (EEql _) ->
+      TBool
+  | Left (ENEql _) ->
+      TBool
+  | Left (ERng _) ->
+      TRng
+  | Left (ERngR _) ->
+      TRng
+  | Left (ERngL _) ->
+      TRng
   | Left (EInt _) ->
       TInt
+  | Left (EDbl _) ->
+      TDbl
+  | Left (EStr _) ->
+      TStr
+  | Left (EVarT (v, ty)) ->
+      ty
   | _ ->
       TDummy
-
-(* EVar of var
-   | EWld
-   | ELet of typ * typ * exp * var * exp
-   | ELam of typ * typ * var * exp
-   | EAp of typ * typ * exp * exp
-   | ETLam of tVar * typ * tVar * exp
-   | ETAp of tVar * typ * exp * exp
-   | ECmd of typ * cmd
-   | EQloc of key
-   | EProj of int * typ * typ * exp
-   | EPair of typ * typ * exp * exp
-   | ETriv
-   | ETrue
-   | EFls
-   | EIte of typ * exp * exp * exp
-   | ENot of exp
-
-
-   | EArrC of typ * exp * exp list
-   | EArrS of typ * exp * exp
-   | EArrI of typ * exp * exp
-   | EArrL of exp
-   | EPow of exp * exp
-   | EMul of exp * exp
-   | EDiv of exp * exp
-   | EMod of exp * exp
-   | EAdd of exp * exp
-   | ESub of exp * exp
-   | EGt of exp * exp
-   | EGte of exp * exp
-   | ELt of exp * exp
-   | ELte of exp * exp
-   | EEql of exp * exp
-   | ENEql of exp * exp
-   | ERng of exp * exp
-   | ERngR of exp
-   | ERngL of exp
-   | EInt of int
-   | EDbl of float
-   | EStr of string
-   | EVarT of var * typ *)
 
 (* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
 let rec extract_ifs (stmts : stm list) : stm list * stm list =
