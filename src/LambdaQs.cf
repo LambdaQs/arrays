@@ -43,6 +43,7 @@ EFls.  Exp ::= "false";
 EIte.  Exp ::= "if" "[" Typ "]" "(" Exp ";" Exp ";" Exp ")";
 ENot.  Exp ::= "not" Exp;
 EArrC. Exp ::= "anew" "[" Typ "]" "(" Exp ";" [Exp] ")";                -- new array,   e.g. let a be anew[int](3; [1,2,3])
+--TODO: add primitive to deal with repeated arrays
 EArrS. Exp ::= "arepeat" "[" Typ "]" "(" Exp ";" Exp ")";               -- array of repeated elem, first number is size to be consisten with EArrC
 EArrI. Exp ::= "aidx" "[" Typ "]" "(" Exp ";" Exp ")";                  -- array index, e.g. aidx[int](a; 1) gets the 2nd elem in a
 EArrL. Exp ::= "alen" "(" Exp ")";                                      -- array length e.g. alen(a)

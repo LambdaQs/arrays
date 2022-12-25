@@ -35,9 +35,7 @@ type env_t =
   ; tvars: typ Strmap.t }
 (*FIXME: make tvars a more simpler structure *)
 
-(* FIXME: dummy implementation!! *)
-(* JZ: what type is term here? Im assuming its an LQS expression *)
-(* Kartik: that's right! We are calling `typeof` after elaborating Q# expressions *)
+(* note that as long as TDummy never occurs as an output of typeof, we know it will never occur in the final tree *)
 let typeof (term : lqsterm) (env : env_t) : typ =
   match term with
   | Left (EVar (MVar (Ident var_name))) -> (
@@ -46,16 +44,98 @@ let typeof (term : lqsterm) (env : env_t) : typ =
         TDummy (*FIXME: should eventually be an error? *)
     | Some t ->
         t )
-  | Left (EArrC (ty, _, _)) ->
-      TArr ty
+  | Left EWld ->
+      failwith "TODO: EWld"
+  | Left (ELet (t1, t2, e1, v, e2)) ->
+      t2 (* TODO: run tests to make sure this is sufficient *)
+  | Left (ELam (t1, t2, v, e)) ->
+      TFun (t1, t2)
+  | Left (EAp (t1, t2, e1, e2)) -> (
+    match t1 with
+    | TFun (inty, outy) ->
+        if inty == t2 then outy
+        else failwith "type mismatch in function application"
+    | _ ->
+        failwith "expected function typex" )
+  | Left (ETLam (tv1, typ, tv2, exp)) ->
+      failwith "TODO: ETLam"
+  | Left (ETAp (tv, ty, e1, e2)) ->
+      failwith "TODO: ETAp"
+  | Left (ECmd (ty, cm)) ->
+      ty
+  | Left (EQloc key) ->
+      failwith "TODO: EQloc"
+  (* TODO: do pairs need the same type? if not, then how to do EProj? *)
+  | Left (EProj (i, t1, t2, e)) ->
+      if t1 == t2 then t1 else failwith "pairs much have the same type"
+  | Left (EPair (t1, t2, e1, e2)) ->
+      if t1 == t2 then TProd (t1, t2)
+      else failwith "pairs much have the same type"
   | Left ETriv ->
       TUnit
-  | Left (EInt _) ->
-      TInt
+  | Left ETrue ->
+      TBool
+  | Left EFls ->
+      TBool
   | Left (EIte (ty, _, _, _)) ->
       ty
+  | Left (ENot _) ->
+      TBool
+  | Left (EArrC (ty, _, _)) ->
+      TArr ty
+  | Left (EArrS (ty, _, _)) ->
+      TArr ty
+  | Left (EArrL _) ->
+      TInt
+  (* this is all already setup in elab_exp below, so just returning ty suffices *)
+  | Left (EArrI (ty, lis, ind)) ->
+      ty
+  | Left (EInt _) ->
+      TInt
   | _ ->
       TDummy
+
+(* EVar of var
+   | EWld
+   | ELet of typ * typ * exp * var * exp
+   | ELam of typ * typ * var * exp
+   | EAp of typ * typ * exp * exp
+   | ETLam of tVar * typ * tVar * exp
+   | ETAp of tVar * typ * exp * exp
+   | ECmd of typ * cmd
+   | EQloc of key
+   | EProj of int * typ * typ * exp
+   | EPair of typ * typ * exp * exp
+   | ETriv
+   | ETrue
+   | EFls
+   | EIte of typ * exp * exp * exp
+   | ENot of exp
+
+
+   | EArrC of typ * exp * exp list
+   | EArrS of typ * exp * exp
+   | EArrI of typ * exp * exp
+   | EArrL of exp
+   | EPow of exp * exp
+   | EMul of exp * exp
+   | EDiv of exp * exp
+   | EMod of exp * exp
+   | EAdd of exp * exp
+   | ESub of exp * exp
+   | EGt of exp * exp
+   | EGte of exp * exp
+   | ELt of exp * exp
+   | ELte of exp * exp
+   | EEql of exp * exp
+   | ENEql of exp * exp
+   | ERng of exp * exp
+   | ERngR of exp
+   | ERngL of exp
+   | EInt of int
+   | EDbl of float
+   | EStr of string
+   | EVarT of var * typ *)
 
 (* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
 let rec extract_ifs (stmts : stm list) : stm list * stm list =
@@ -513,6 +593,9 @@ and elab_exp (exp : expr) (env : env_t) : exp =
   | QsETp [e1; e2] ->
       let e1' = elab_exp e1 env in
       let e2' = elab_exp e2 env in
+      (* let ty1 = typeof (Left e1') env in
+         let ty2 = typeof (Left e2') env in
+         let ty = combine_types ty1 ty2 in *)
       EPair (typeof (Left e1') env, typeof (Left e2') env, e1', e2')
   | QsETp _ ->
       failwith "only 2-ples are accepted"
@@ -530,13 +613,10 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       match typeof (Left num') env with
       | TInt ->
           EArrS (typeof (Left elem') env, num', elem')
-      | TDummy ->
-          EArrS (typeof (Left elem') env, num', elem')
       | _ ->
           failwith "must repeat elem with int" )
   | QsEItem _ ->
-      failwith
-        "TODO: QsEItem" (*should we just translate this syntactic sugar? *)
+      failwith "TODO: QsEItem"
   | QsEUnwrap _ ->
       failwith "TODO: QsEUnwrap"
   | QsEIndex (lis, ind) -> (
@@ -572,6 +652,17 @@ and elab_exp (exp : expr) (env : env_t) : exp =
             , MUni (Ident "X")
             , EVar (MVar (Ident ctl))
             , elab_exp tgt env ) )
+  | QsECall (QsEName (QUnqual (UIdent "Length")), es) -> (
+    match es with
+    | [arr] -> (
+        let arr' = elab_exp arr env in
+        match typeof (Left arr') env with
+        | TArr ty ->
+            EArrL arr'
+        | _ ->
+            failwith "expected array type" )
+    | _ ->
+        failwith "Length takes 1 argument" )
   | QsECall (func, es) -> (
       let func' = elab_exp func env in
       match es with
