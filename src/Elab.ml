@@ -41,7 +41,8 @@ let typeof (term : lqsterm) (env : env_t) : typ =
   | Left (EVar (MVar (Ident var_name))) -> (
     match Strmap.find_opt var_name env.vars with
     | None ->
-        TDummy (*FIXME: should eventually be an error? *)
+        failwith ("variable name not found: " ^ var_name)
+        (*FIXME: add the specific variable name to string for testing *)
     | Some t ->
         t )
   | Left EWld ->
@@ -55,8 +56,13 @@ let typeof (term : lqsterm) (env : env_t) : typ =
     | TFun (inty, outy) ->
         if inty == t2 then outy
         else failwith "type mismatch in function application"
+    (* FIXME: add this case *)
+    | TAll (intv, outy) ->
+        failwith "Type variable application"
     | _ ->
-        failwith "expected function typex" )
+        failwith
+          ( "expected function type, instead got: "
+          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp t1) ) )
   | Left (ETLam (tv1, typ, tv2, exp)) ->
       failwith "TODO: ETLam"
   | Left (ETAp (tv, ty, e1, e2)) ->
@@ -65,12 +71,16 @@ let typeof (term : lqsterm) (env : env_t) : typ =
       ty
   | Left (EQloc key) ->
       failwith "TODO: EQloc"
-  (* TODO: do pairs need the same type? if not, then how to do EProj? *)
-  | Left (EProj (i, t1, t2, e)) ->
-      if t1 == t2 then t1 else failwith "pairs much have the same type"
+  | Left (EProj (i, t1, t2, e)) -> (
+    match i with
+    | 1 ->
+        t1
+    | 2 ->
+        t2
+    | _ ->
+        failwith "invalid index for projection" )
   | Left (EPair (t1, t2, e1, e2)) ->
-      if t1 == t2 then TProd (t1, t2)
-      else failwith "pairs much have the same type"
+      TProd (t1, t2)
   | Left ETriv ->
       TUnit
   | Left ETrue ->
@@ -128,8 +138,18 @@ let typeof (term : lqsterm) (env : env_t) : typ =
       TStr
   | Left (EVarT (v, ty)) ->
       ty
-  | _ ->
-      TDummy
+  | Right (CRet (ty, exp)) ->
+      ty
+  | Right (CBnd (ty1, ty2, exp, var, cmd)) ->
+      ty2
+  | Right (CNew (ty, var, cmd)) ->
+      ty
+  | Right (CGap _) ->
+      TUnit
+  | Right (CDiag _) ->
+      TUnit
+  | Right (CMeas _) ->
+      TInt
 
 (* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
 let rec extract_ifs (stmts : stm list) : stm list * stm list =
@@ -147,11 +167,6 @@ let rec extract_ifs (stmts : stm list) : stm list * stm list =
 (* TODO: figure out what to do with TQRef and TQAll here *)
 let rec combine_types (ty1 : typ) (ty2 : typ) : typ =
   match (ty1, ty2) with
-  (* TODO: eventually, TDummy should not be allowed here *)
-  | TDummy, _ ->
-      ty2
-  | _, TDummy ->
-      ty1
   | TTVar tvar1, TTVar tvar2 ->
       if tvar1 == tvar2 then ty1 else failwith "type variable mismatch"
   | TQref _, TQref _ ->
@@ -215,16 +230,12 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : exp =
           (* f is a function here *)
           let env' = {env with vars= vars'} in
           let m = elab_nselmts elmts env' in
-          (*FIXME: do we want the final type here? or the type of the entire function f *)
-          (* JZ: right now, its the entire type which seems correct *)
           ELet (ty_body, typeof (Left m) env', body, f, m) )
 (*FIXME: pretty sure m will always typecheck to unit?*)
 (*JZ: we say let f = ..body.. in ..m.., so the type of m may have nothing to do with f *)
 
 and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
   match calld with
-  (* TODO: make sure only pure things happen inside functions, although qubits can still be passed *)
-  (* TODO: add mechanism here to ensure that functions stay pure *)
   | CDFun (UIdent name, TAEmpty, ParTpl params, rettyp, body) ->
       let rettyp', body' = curry [] params rettyp body env in
       (MVar (Ident name), rettyp', body')
@@ -361,9 +372,9 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
         let s = elab_stmts stmts' env' in
         match s with
         | Left e_s ->
-            Left (ELet (ty_e, typeof s env, e, MVar (Ident var), e_s))
+            Left (ELet (ty_e, typeof s env', e, MVar (Ident var), e_s))
         | Right c_s ->
-            Right (CBnd (ty_e, typeof s env, e, MVar (Ident var), c_s)) )
+            Right (CBnd (ty_e, typeof s env', e, MVar (Ident var), c_s)) )
     | BndTplA bnds ->
         failwith (unimplemented_error "list binds") )
   (* TODO: what differentiates SLet, SMut, and SSet? *)
@@ -379,9 +390,6 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
       failwith (unimplemented_error "SSetOp")
   | SSetW (UIdent arg, exp1, larr, exp2) :: stmts' ->
       failwith (unimplemented_error "SSetW")
-  (* TODO: look up how these are done in other languages since the implementation here is probably similar *)
-  (* I have some ideas for how this would work, but gets translated to exp anyways and not cmd *)
-  (* will either need to figure out what VAR to bind to as in the above or do CRet (EIte)  *)
   | SIf (exp, scope) :: stmts' -> (
       let ites, stmts'' = extract_ifs stmts' in
       (*FIXME: if let bindings occur in if statements, then we should pass an updated env' here *)
