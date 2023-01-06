@@ -58,7 +58,7 @@ let typeof (term : lqsterm) (env : env_t) : typ =
         else failwith "type mismatch in function application"
     (* FIXME: add this case *)
     | TAll (intv, outy) ->
-        failwith "Type variable application"
+        failwith "NYI: typeof TAll"
     | _ ->
         failwith
           ( "expected function type, instead got: "
@@ -184,6 +184,8 @@ let rec combine_types (ty1 : typ) (ty2 : typ) : typ =
       TProd (combine_types l1 l2, combine_types r1 r2)
   | TArr t1, TArr t2 ->
       TArr (combine_types t1 t2)
+  | TProd (l1, r1), TProd (l2, r2) ->
+      TProd (combine_types l1 l2, combine_types r1 r2)
   | _ ->
       if ty1 == ty2 then ty1
       else
