@@ -5,7 +5,7 @@ open Map
 open List
 open Either
 
-let unimplemented_error s = "NYI: " ^ s
+let nyi s = failwith ("NYI: " ^ s)
 
 type lqsterm = (exp, cmd) Either.t
 
@@ -58,7 +58,7 @@ let typeof (term : lqsterm) (env : env_t) : typ =
         else failwith "type mismatch in function application"
     (* FIXME: add this case *)
     | TAll (intv, outy) ->
-        failwith "NYI: typeof TAll"
+        nyi "typeof TAll"
     | _ ->
         failwith
           ( "expected function type, instead got: "
@@ -202,7 +202,7 @@ let rec elab (prog : doc) (env : env_t) : exp =
   | Prog [ns] ->
       elab_nmspace ns env
   | _ ->
-      failwith (unimplemented_error "Multiple namespaces")
+      nyi "Multiple namespaces"
 
 and elab_nmspace (ns : nmspace) (env : env_t) : exp =
   match ns with
@@ -222,7 +222,7 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : exp =
   | NSOpAs _ :: elmts ->
       elab_nselmts elmts env
   | NSTy _ :: _ ->
-      failwith (unimplemented_error "Type declarations (NSTy)")
+      nyi "Type declarations (NSTy)"
   (* TODO: do something with declaration prefix *)
   | NSClbl (_, calld) :: elmts -> (
       let f, ty_body, body = elab_calldec calld env in
@@ -292,7 +292,7 @@ and curry (tyvars : tIdent list) (params : param list) (rettyp : tp)
       let cur_ty, cur = curry [] t rettyp body env' in
       (TFun (typ', cur_ty), ELam (typ', cur_ty, MVar (Ident arg), cur))
   | [], _ ->
-      failwith (unimplemented_error "Nested paramss (ParNIA)")
+      nyi "Nested paramss (ParNIA)"
 
 (* preps the param, to be used in curry *)
 and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
@@ -329,7 +329,7 @@ and elab_body (body : body) (env : env_t) : typ * lqsterm =
   | BSpec [] ->
       (TUnit, Left ETriv)
   | BSpec _ ->
-      failwith (unimplemented_error "Specializations (BSpec)")
+      nyi "Specializations (BSpec)"
   | BScope (Scp stmts) ->
       let scope = elab_stmts stmts env in
       (typeof scope env, scope)
@@ -355,7 +355,7 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
       (*FIXME: in an operaton, this should be a command *)
       (* TODO: should things after return statement be ignored? *)
   | SFail exp :: stmts' ->
-      failwith (unimplemented_error "(SFail)")
+      nyi "(SFail)"
   | SLet (bnd, exp) :: stmts' -> (
     match bnd with
     | BndWild -> (
@@ -378,7 +378,7 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
         | Right c_s ->
             Right (CBnd (ty_e, typeof s env', e, MVar (Ident var), c_s)) )
     | BndTplA bnds ->
-        failwith (unimplemented_error "list binds") )
+        nyi "list binds" )
   (* TODO: what differentiates SLet, SMut, and SSet? *)
   | SMut (bnd, exp) :: stmts' ->
       elab_stmts
@@ -389,9 +389,9 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
         (SLet (bnd, exp) :: stmts')
         env (*FIXME: make this specific to Set *)
   | SSetOp (UIdent arg, sOp, exp) :: stmts' ->
-      failwith (unimplemented_error "SSetOp")
+      nyi "SSetOp"
   | SSetW (UIdent arg, exp1, larr, exp2) :: stmts' ->
-      failwith (unimplemented_error "SSetW")
+      nyi "SSetW"
   | SIf (exp, scope) :: stmts' -> (
       let ites, stmts'' = extract_ifs stmts' in
       (*FIXME: if let bindings occur in if statements, then we should pass an updated env' here *)
@@ -417,20 +417,20 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
   | SElse scope :: stmts' ->
       failwith "Else statement does not occur after an If statement"
   | SFor (bnd, exp, scope) :: stmts' ->
-      failwith (unimplemented_error "statement SFor")
+      nyi "statement SFor"
   | SWhile (exp, scope) :: stmts' ->
-      failwith (unimplemented_error "statement SWhile")
+      nyi "statement SWhile"
   (* TODO: can we assume that when SUntil appears, SRep must have come before? *)
   | SRep scope :: stms' ->
-      failwith (unimplemented_error "statement SRep")
+      nyi "statement SRep"
   | SUntil exp :: stms' ->
-      failwith (unimplemented_error "statement SUntil")
+      nyi "statement SUntil"
   | SUntilF (exp, scope) :: stms' ->
-      failwith (unimplemented_error "statement SUntilF")
+      nyi "statement SUntilF"
   | SWithin scope :: stms' ->
-      failwith (unimplemented_error "statement SWithin")
+      nyi "statement SWithin"
   | SApply scope :: stms' ->
-      failwith (unimplemented_error "statement SApply")
+      nyi "statement SApply"
   | SUse (QBnd (bnd, qbitInit)) :: stms' -> (
     match qbitInit with
     | QInitS -> (
@@ -465,11 +465,11 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
       | BndTplA bnds ->
           failwith "mismatch in number of binds" )
     | QInitA num ->
-        failwith (unimplemented_error "(QInitA)")
+        nyi "(QInitA)"
     | QInitT qs ->
-        failwith (unimplemented_error "(QInitT)") )
+        nyi "(QInitT)" )
   | SUseS (qbitBnd, scope) :: stms' ->
-      failwith (unimplemented_error "statement SUseS")
+      nyi "statement SUseS"
 
 (* note that if and elif are basically the same when they come first, elif just had stuff before it *)
 (* However, elif is different from else when they appear second *)
@@ -724,9 +724,9 @@ and elab_exp (exp : expr) (env : env_t) : exp =
   | QsERangeL r ->
       ERngL (elab_exp r env)
   | QsERangeLR ->
-      failwith (unimplemented_error "QsERangeLR")
+      nyi "QsERangeLR"
   | x ->
-      failwith (unimplemented_error (ShowQSharp.show (ShowQSharp.showExpr x)))
+      nyi (ShowQSharp.show (ShowQSharp.showExpr x))
 
 (* separate helper for function application to deal with both curried and uncurried case *)
 (* note that it takes in an *)
@@ -744,7 +744,7 @@ and elab_app (func : exp) (args : expr list) (env : env_t) : exp =
 and elab_type (typ : tp) (env : env_t) : typ =
   match typ with
   | TpEmp ->
-      failwith (unimplemented_error "(TEmp)")
+      nyi "(TEmp)"
   | TpPar (TIdent tyarg) -> (
     match Strmap.find_opt tyarg env.tvars with
     | None ->
@@ -752,7 +752,7 @@ and elab_type (typ : tp) (env : env_t) : typ =
     | Some t ->
         t )
   | TpUDT _ ->
-      failwith (unimplemented_error "(TQNm)")
+      nyi "(TQNm)"
   | TpTpl typs -> (
     match typs with
     (*FIXME: this first case comes up some times, incorrectly I think, but just translating t seems to work well enough *)
@@ -771,11 +771,11 @@ and elab_type (typ : tp) (env : env_t) : typ =
   | TpArr typ ->
       TArr (elab_type typ env)
   | TpBInt ->
-      failwith (unimplemented_error "(TBInt)")
+      nyi "(TBInt)"
   | TpBool ->
       TBool
   | TpDbl ->
-      failwith (unimplemented_error "(TDbl)")
+      nyi "(TDbl)"
   | TpInt ->
       TInt
   | TpPli ->
@@ -783,11 +783,11 @@ and elab_type (typ : tp) (env : env_t) : typ =
   (* TODO: should send to Qref, but what should the key be? *)
   | TpQbit ->
       (* given polymorphic key *)
-      failwith (unimplemented_error "(TpQbit)")
+      nyi "(TpQbit)"
   | TpRng ->
       TRng
   | TpRes ->
-      failwith (unimplemented_error "(TpRes)")
+      nyi "(TpRes)"
   | TpStr ->
       TStr
   | TpUnit ->
