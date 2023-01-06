@@ -63,7 +63,7 @@ let typeof (term : lqsterm) (env : env_t) : typ =
         failwith
           ( "expected function type, instead got: "
           ^ ShowLambdaQs.show (ShowLambdaQs.showTyp t1) ) )
-  | Left (ETLam (tv1, typ, tv2, exp)) ->
+  | Left (ETLam (tv, exp)) ->
       failwith "TODO: ETLam"
   | Left (ETAp (tv, ty, e1, e2)) ->
       failwith "TODO: ETAp"
@@ -262,7 +262,7 @@ and curry (tyvars : tIdent list) (params : param list) (rettyp : tp)
       let tvars' = Strmap.add tvstr (TTVar tv') env.tvars in
       let env' = {env with tvars= tvars'} in
       let cur_ty, cur = curry tvs params rettyp body env' in
-      (TAll (tv', cur_ty), ETLam (tv', cur_ty, tv', cur))
+      (TAll (tv', cur_ty), ETLam (tv', cur))
   | [], [] ->
       let typ' = TUnit in
       let ty_body, pbody = elab_body body env in
