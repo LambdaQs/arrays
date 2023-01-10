@@ -91,14 +91,14 @@ let typeof (term : lqsterm) (env : env_t) : typ =
       ty
   | Left (ENot _) ->
       TBool
-  | Left (EArrC (ty, _, _)) ->
+  | Left (EArrNew (ty, _, _)) ->
       TArr ty
-  | Left (EArrS (ty, _, _)) ->
+  | Left (EArrRep (ty, _, _)) ->
       TArr ty
   (* this is all already setup in elab_exp below, so just returning ty suffices *)
-  | Left (EArrI (ty, lis, ind)) ->
+  | Left (EArrIdx (ty, lis, ind)) ->
       ty
-  | Left (EArrL _) ->
+  | Left (EArrLen _) ->
       TInt
   | Left (EPow _) ->
       TInt
@@ -606,17 +606,17 @@ and elab_exp (exp : expr) (env : env_t) : exp =
   | QsEArr es -> (
     match es with
     | [] ->
-        EArrC (TUnit, EInt 0, [])
+        EArrNew (TUnit, EInt 0, [])
     | e :: es' ->
         let ty = typeof (Left (elab_exp e env)) env in
-        EArrC (ty, EInt (List.length es), List.map (fun e -> elab_exp e env) es)
-    )
+        EArrNew
+          (ty, EInt (List.length es), List.map (fun e -> elab_exp e env) es) )
   | QsESArr (elem, _, num) -> (
       let elem' = elab_exp elem env in
       let num' = elab_exp num env in
       match typeof (Left num') env with
       | TInt ->
-          EArrS (typeof (Left elem') env, num', elem')
+          EArrRep (typeof (Left elem') env, num', elem')
       | _ ->
           failwith "must repeat elem with int" )
   | QsEItem _ ->
@@ -631,13 +631,13 @@ and elab_exp (exp : expr) (env : env_t) : exp =
         (*TODO: is this correct? We can index into a list with a range, so should be something like this *)
         match ind' with
         | ERng _ ->
-            EArrI (TArr ty, lis', ind')
+            EArrIdx (TArr ty, lis', ind')
         | ERngR _ ->
-            EArrI (TArr ty, lis', ind')
+            EArrIdx (TArr ty, lis', ind')
         | ERngL _ ->
-            EArrI (TArr ty, lis', ind')
+            EArrIdx (TArr ty, lis', ind')
         | EInt _ ->
-            EArrI (ty, lis', ind')
+            EArrIdx (ty, lis', ind')
         | _ ->
             failwith "incorrect type for indexing into a list" )
       | _ ->
@@ -662,7 +662,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
         let arr' = elab_exp arr env in
         match typeof (Left arr') env with
         | TArr ty ->
-            EArrL arr'
+            EArrLen arr'
         | _ ->
             failwith "expected array type" )
     | _ ->
