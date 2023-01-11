@@ -71,7 +71,7 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
         failwith
           ( "expected function type, instead got: "
           ^ ShowLambdaQs.show (ShowLambdaQs.showTyp t1) ) )
-  (* does this case ever come up? I can't find any examples *)
+  (* NOTE: this is a rare case *)
   | Left (ETAp (tv, ty, e1, e2)) ->
       failwith "TODO: ETAp"
   | Left (ECmd (ty, cm)) ->
@@ -755,8 +755,10 @@ and elab_exp (exp : expr) (env : env_t) : exp =
   | QsECall (func, es) -> (
       let func' = elab_exp func env in
       match es with
+      (* if you apply a function to a single tuple (e1,...,en), I make this the same as f e1 ... en,
+          but this may be unnecessary *)
       | [QsETp es'] ->
-          elab_app func' es env (* deals with weird uncurried case *)
+          elab_app func' es' env (* deals with weird uncurried case *)
       | _ ->
           elab_app func' es env )
   | QsEPos _ ->
@@ -814,7 +816,6 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       nyi (ShowQSharp.show (ShowQSharp.showExpr x))
 
 (* separate helper for function application to deal with both curried and uncurried case *)
-(* note that it takes in an *)
 and elab_app (func : exp) (args : expr list) (env : env_t) : exp =
   match args with
   | [] ->
@@ -832,7 +833,8 @@ and elab_app (func : exp) (args : expr list) (env : env_t) : exp =
       | arg1 :: argtys' ->
           if contains_poly_type arg1 then
             let tvstr, replty = match_poly_type arg1 argty in
-            let tvs' = List.filter (fun tv -> tv == tvstr) tvs in
+            (* this line uses monomorphization of polymorphic types *)
+            let tvs' = List.filter (fun tv -> tv != tvstr) tvs in
             let argtys' =
               List.map (fun ty -> replace_tyvar ty tvstr replty) argtys
             in
