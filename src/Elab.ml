@@ -752,15 +752,9 @@ and elab_exp (exp : expr) (env : env_t) : exp =
             failwith "expected array type" )
     | _ ->
         failwith "Length takes 1 argument" )
-  | QsECall (func, es) -> (
+  | QsECall (func, es) ->
       let func' = elab_exp func env in
-      match es with
-      (* if you apply a function to a single tuple (e1,...,en), I make this the same as f e1 ... en,
-          but this may be unnecessary *)
-      | [QsETp es'] ->
-          elab_app func' es' env (* deals with weird uncurried case *)
-      | _ ->
-          elab_app func' es env )
+      elab_app func' es env
   | QsEPos _ ->
       failwith "TODO: QsEPos"
   | QsENeg _ ->
