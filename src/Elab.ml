@@ -309,24 +309,30 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : exp =
           let env' = {env with vars= vars'} in
           let m = elab_nselmts elmts env' in
           ELet (ty_body, typeof (Left m) env', body, f, m) )
+
 (*FIXME: pretty sure m will always typecheck to unit?*)
 (*JZ: we say let f = ..body.. in ..m.., so the type of m may have nothing to do with f *)
 
+(* FIXME: could make this with curry, curry_tyvars in a nicer way, but this works for now *)
 and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
   match calld with
   | CDFun (UIdent name, TAEmpty, ParTpl params, rettyp, body) ->
       let rettyp', body' = curry params rettyp body [] env in
-      (MVar (Ident name), rettyp', body')
+      let rettyp'', body'' = curry_tyvars [] rettyp' body' in
+      (MVar (Ident name), rettyp'', body'')
   | CDFun (UIdent name, TAList tvars, ParTpl params, rettyp, body) ->
       let rettyp', body' = curry params rettyp body (elab_tyvars tvars) env in
-      (MVar (Ident name), rettyp', body')
+      let rettyp'', body'' = curry_tyvars (elab_tyvars tvars) rettyp' body' in
+      (MVar (Ident name), rettyp'', body'')
   (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
   | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) ->
       let rettyp', body' = curry params rettyp body [] env in
-      (MVar (Ident name), rettyp', body')
+      let rettyp'', body'' = curry_tyvars [] rettyp' body' in
+      (MVar (Ident name), rettyp'', body'')
   | CDOp (UIdent name, TAList tvars, ParTpl params, rettyp, _, body) ->
       let rettyp', body' = curry params rettyp body (elab_tyvars tvars) env in
-      (MVar (Ident name), rettyp', body')
+      let rettyp'', body'' = curry_tyvars (elab_tyvars tvars) rettyp' body' in
+      (MVar (Ident name), rettyp'', body'')
 
 (* very simple function that translates the tIdents to tVars, basically just a map *)
 and elab_tyvars (tyvars : tIdent list) : tVar list =
@@ -350,40 +356,35 @@ and curry_tyvars (tyvars : tVar list) (ty : typ) (ex : exp) : typ * exp =
    function, possibly easier than to use typeof? *)
 and curry (params : param list) (rettyp : tp) (body : body) (tyvars : tVar list)
     (env : env_t) : typ * exp =
-  match tyvars with
-  | tv :: tvs ->
-      let ty', ex' = curry params rettyp body tvs env in
-      (TAll (tv, ty'), ETLam (tv, ex'))
-  | [] -> (
-    match params with
-    | [] ->
-        let typ' = TUnit in
-        let ty_body, pbody = elab_body body env in
-        let rettyp' = elab_type rettyp tyvars env in
-        ( TFun (typ', rettyp')
-        , ELam
-            ( typ'
-            , rettyp'
-            , wild_var (* TODO: might want to make this argument optional *)
-            , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
-    | [ParNI (NItem (UIdent arg, typ))] ->
-        (* if typ is TQbit, have to do smth entirely different so this gets a bit annoying *)
-        let typ', env' = prep_param arg typ tyvars env in
-        let ty_body, pbody = elab_body body env' in
-        let rettyp' = elab_type rettyp tyvars env' in
-        ( TFun (typ', combine_types rettyp' ty_body)
-          (* note that we check ty_body against rettyp' *)
-        , ELam
-            ( typ'
-            , rettyp'
-            , MVar (Ident arg)
-            , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
-    | ParNI (NItem (UIdent arg, typ)) :: t ->
-        let typ', env' = prep_param arg typ tyvars env in
-        let cur_ty, cur = curry t rettyp body tyvars env' in
-        (TFun (typ', cur_ty), ELam (typ', cur_ty, MVar (Ident arg), cur))
-    | _ ->
-        nyi "Nested paramss (ParNIA)" )
+  match params with
+  | [] ->
+      let typ' = TUnit in
+      let ty_body, pbody = elab_body body env in
+      let rettyp' = elab_type rettyp tyvars env in
+      ( TFun (typ', rettyp')
+      , ELam
+          ( typ'
+          , rettyp'
+          , wild_var (* TODO: might want to make this argument optional *)
+          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
+  | [ParNI (NItem (UIdent arg, typ))] ->
+      (* if typ is TQbit, have to do smth entirely different so this gets a bit annoying *)
+      let typ', env' = prep_param arg typ tyvars env in
+      let ty_body, pbody = elab_body body env' in
+      let rettyp' = elab_type rettyp tyvars env' in
+      ( TFun (typ', combine_types rettyp' ty_body)
+        (* note that we check ty_body against rettyp' *)
+      , ELam
+          ( typ'
+          , rettyp'
+          , MVar (Ident arg)
+          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
+  | ParNI (NItem (UIdent arg, typ)) :: t ->
+      let typ', env' = prep_param arg typ tyvars env in
+      let cur_ty, cur = curry t rettyp body tyvars env' in
+      (TFun (typ', cur_ty), ELam (typ', cur_ty, MVar (Ident arg), cur))
+  | _ ->
+      nyi "Nested paramss (ParNIA)"
 
 (* preps the param, to be used in curry *)
 and prep_param (arg : string) (argtyp : tp) (tyvars : tVar list) (env : env_t) :
