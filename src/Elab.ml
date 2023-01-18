@@ -31,6 +31,40 @@ type env_t = {qrefs: int Strmap.t; qalls: int Strmap.t; vars: typ Strmap.t}
 let rec ignore_tyvars (ty : typ) : typ =
   match ty with TAll (intv, outy) -> ignore_tyvars outy | _ -> ty
 
+(* given two LQS types, returns the combined type or returns error if there is a problem *)
+(* what is the difference between = and == here? *)
+let rec equal_types (ty1 : typ) (ty2 : typ) : typ =
+  (* when would this case actually come up? *)
+  match (ty1, ty2) with
+  | TTVar tv1, TTVar tv2 ->
+      if tv1 = tv2 then ty1 else type_mismatch_error ty1 ty2
+  | TQref q1, TQref q2 ->
+      (*TODO: see if this causes any errors *)
+      if q1 = q2 then ty1 else type_mismatch_error ty1 ty2
+  | TQAll _, TQAll _ ->
+      ty1 (* TODO: figure out what to do with TQRef and TQAll here *)
+  | TFun (in1, ou1), TFun (in2, ou2) ->
+      TFun (equal_types in1 in2, equal_types ou1 ou2)
+  | TAll (tv1, ou1), TAll (tv2, ou2) ->
+      if tv1 = tv2 then TAll (tv1, equal_types ou1 ou2)
+      else type_mismatch_error ty1 ty2
+  | TCmd t1, TCmd t2 ->
+      TCmd (equal_types t1 t2)
+  | TProd (l1, r1), TFun (l2, r2) ->
+      TProd (equal_types l1 l2, equal_types r1 r2)
+  | TArr t1, TArr t2 ->
+      TArr (equal_types t1 t2)
+  | TProd (l1, r1), TProd (l2, r2) ->
+      TProd (equal_types l1 l2, equal_types r1 r2)
+  | _ ->
+      if ty1 = ty2 then ty1
+      else
+        failwith
+          ( "type mismatch:\nty1: "
+          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty1)
+          ^ "\nty2: "
+          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty2) )
+
 (* note that as long as TDummy never occurs as an output of typeof, we know it will never occur in the final tree *)
 let rec typeof (term : lqsterm) (env : env_t) : typ =
   match term with
@@ -52,6 +86,7 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
   | Left (EAp (t1, t2, e1, e2)) -> (
     match ignore_tyvars t1 with
     | TFun (inty, outy) ->
+        let _ = equal_types inty t2 in
         outy
     (*FIXME: eventually add checker *)
     (* if inty == t2 then outy
@@ -211,6 +246,7 @@ let rec contains_poly_type (ty : typ) : bool =
       false
 
 (* returns ("T'", type to replace T' with) *)
+(*TODO: finish this function *)
 let rec match_poly_type (ty : typ) (argty : typ) : tVar * typ =
   match (ty, argty) with
   | TTVar tvar, argty ->
@@ -236,40 +272,6 @@ let rec replace_tyvar (ty : typ) (tv : tVar) (replty : typ) : typ =
       TArr (replace_tyvar ty1 tv replty)
   | _ ->
       ty
-
-(* given two LQS types, returns the combined type or returns error if there is a problem *)
-(* TODO: figure out what to do with TQRef and TQAll here *)
-(* what is the difference between = and == here? *)
-let rec combine_types (ty1 : typ) (ty2 : typ) : typ =
-  (* when would this case actually come up? *)
-  match (ty1, ty2) with
-  | TTVar tv1, TTVar tv2 ->
-      if tv1 = tv2 then ty1 else type_mismatch_error ty1 ty2
-  | TQref _, TQref _ ->
-      ty1
-  | TQAll _, TQAll _ ->
-      ty1
-  | TFun (in1, ou1), TFun (in2, ou2) ->
-      TFun (combine_types in1 in2, combine_types ou1 ou2)
-  | TAll (tv1, ou1), TAll (tv2, ou2) ->
-      if tv1 = tv2 then TAll (tv1, combine_types ou1 ou2)
-      else type_mismatch_error ty1 ty2
-  | TCmd t1, TCmd t2 ->
-      TCmd (combine_types t1 t2)
-  | TProd (l1, r1), TFun (l2, r2) ->
-      TProd (combine_types l1 l2, combine_types r1 r2)
-  | TArr t1, TArr t2 ->
-      TArr (combine_types t1 t2)
-  | TProd (l1, r1), TProd (l2, r2) ->
-      TProd (combine_types l1 l2, combine_types r1 r2)
-  | _ ->
-      if ty1 = ty2 then ty1
-      else
-        failwith
-          ( "type mismatch:\nty1: "
-          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty1)
-          ^ "\nty2: "
-          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty2) )
 
 (* elab takes in the the program and the environment composed of the
    signature and context *)
@@ -372,7 +374,7 @@ and curry (params : param list) (rettyp : tp) (body : body) (tyvars : tVar list)
       let typ', env' = prep_param arg typ tyvars env in
       let ty_body, pbody = elab_body body env' in
       let rettyp' = elab_type rettyp tyvars env' in
-      ( TFun (typ', combine_types rettyp' ty_body)
+      ( TFun (typ', equal_types rettyp' ty_body)
         (* note that we check ty_body against rettyp' *)
       , ELam
           ( typ'
@@ -566,7 +568,7 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
 
 (* note that if and elif are basically the same when they come first, elif just had stuff before it *)
 (* However, elif is different from else when they appear second *)
-(* TODO: make use of combine_types to avoid repeated code *)
+(* TODO: make use of equal_types to avoid repeated code *)
 and elab_ite (stmts : stm list) (env : env_t) : exp =
   match stmts with
   | [SIf (cond, Scp stmts')] -> (
@@ -594,10 +596,10 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
       let t2 = typeof s2 env in
       match (s1, s2) with
       | Left e1, Left e2 ->
-          EIte (combine_types t1 t2, cond', e1, e2)
+          EIte (equal_types t1 t2, cond', e1, e2)
       | Right m1, Right m2 ->
           EIte
-            ( combine_types t1 t2
+            ( equal_types t1 t2
             , ( if typeof (Left cond') env = TBool then cond'
                 (*TODO: make sure we should be checking this here! *)
               else failwith "expected bool, different type present" )
@@ -613,10 +615,10 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
       let t2 = typeof s2 env in
       match (s1, s2) with
       | Left e1, Left e2 ->
-          EIte (combine_types t1 t2, cond', e1, e2)
+          EIte (equal_types t1 t2, cond', e1, e2)
       | Right m1, Right m2 ->
           EIte
-            ( combine_types t1 t2
+            ( equal_types t1 t2
             , ( if typeof (Left cond') env = TBool then cond'
               else failwith "expected bool, different type present" )
             , ECmd (t1, m1)
@@ -630,10 +632,10 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
       let stmts'' = elab_ite stmts' env in
       match s1 with
       | Left e1 ->
-          EIte (combine_types t1 (typeof (Left stmts'') env), cond', e1, stmts'')
+          EIte (equal_types t1 (typeof (Left stmts'') env), cond', e1, stmts'')
       | Right m1 ->
           EIte
-            ( combine_types t1 (typeof (Left stmts'') env)
+            ( equal_types t1 (typeof (Left stmts'') env)
             , cond'
             , ECmd (t1, m1)
             , stmts'' ) )
@@ -644,10 +646,10 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
       let stmts'' = elab_ite stmts' env in
       match s1 with
       | Left e1 ->
-          EIte (combine_types t1 (typeof (Left stmts'') env), cond', e1, stmts'')
+          EIte (equal_types t1 (typeof (Left stmts'') env), cond', e1, stmts'')
       | Right m1 ->
           EIte
-            ( combine_types t1 (typeof (Left stmts'') env)
+            ( equal_types t1 (typeof (Left stmts'') env)
             , cond'
             , ECmd (t1, m1)
             , stmts'' ) )
@@ -692,7 +694,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       let e2' = elab_exp e2 env in
       (* let ty1 = typeof (Left e1') env in
          let ty2 = typeof (Left e2') env in
-         let ty = combine_types ty1 ty2 in *)
+         let ty = equal_types ty1 ty2 in *)
       EPair (typeof (Left e1') env, typeof (Left e2') env, e1', e2')
   | QsETp _ ->
       failwith "only 2-ples are accepted"
@@ -818,6 +820,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       nyi (ShowQSharp.show (ShowQSharp.showExpr x))
 
 (* separate helper for function application to deal with both curried and uncurried case *)
+(* TODO: write function that takes in this expr list and checks for duplicated qubits *)
 and elab_app (func : exp) (args : expr list) (env : env_t) : exp =
   match args with
   | [] ->
@@ -908,6 +911,7 @@ let elab_main () =
       ( "[Input abstract syntax]\n\n"
       ^ (fun x -> ShowQSharp.show (ShowQSharp.showDoc x)) in_ast
       ^ "\n\n" ) ;
+    (* TODO: create an environment where basic functions are defined *)
     let out_ast = elab in_ast {qrefs= empty; qalls= empty; vars= empty} in
     print_string
       ( "[Output abstract syntax]\n\n"
