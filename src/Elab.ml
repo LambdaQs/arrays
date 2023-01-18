@@ -7,17 +7,14 @@ open Either
 
 let nyi s = failwith ("NYI: " ^ s)
 
+let type_mismatch_error ty1 ty2 =
+  failwith
+    ( "type mismatch:\nty1: "
+    ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty1)
+    ^ "\nty2: "
+    ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty2) )
+
 type lqsterm = (exp, cmd) Either.t
-
-(*
-TODO:
-1) Q# -> concrete lambda Q#
-2) concrete -> abstract lambda Q# (type inference)
-3) typechecking lambda Q#
-3') Alias typechecking
-
-elaboration and type checking should really be separate
-*)
 
 (* NOTE: Elaboration: well-typed and well-scoped programs *)
 
@@ -28,12 +25,7 @@ let wild_var = MVar (Ident "_wild_")
 module Strmap = Map.Make (String)
 open Strmap
 
-type env_t =
-  { qrefs: int Strmap.t
-  ; qalls: int Strmap.t
-  ; vars: typ Strmap.t
-  ; tvars: typ Strmap.t }
-(*FIXME: make tvars a more simpler structure *)
+type env_t = {qrefs: int Strmap.t; qalls: int Strmap.t; vars: typ Strmap.t}
 
 (* takes T' -> (U' -> ... -> (t1 -> (t2 ... -> (tn -> tout)...) to ( [T',U'...], [t1,...,tout] ) *)
 let rec ignore_tyvars (ty : typ) : typ =
@@ -46,7 +38,6 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
     match Strmap.find_opt var_name env.vars with
     | None ->
         failwith ("variable name not found: " ^ var_name)
-        (*FIXME: add the specific variable name to string for testing *)
     | Some t ->
         t )
   | Left EWld ->
@@ -232,7 +223,7 @@ let rec match_poly_type (ty : typ) (argty : typ) : tVar * typ =
 let rec replace_tyvar (ty : typ) (tv : tVar) (replty : typ) : typ =
   match ty with
   | TTVar tv' ->
-      if tv == tv' then replty else ty
+      if tv = tv' then replty else ty
   | TFun (ty1, ty2) ->
       TFun (replace_tyvar ty1 tv replty, replace_tyvar ty2 tv replty)
   | TAll (tv, ty) ->
@@ -247,13 +238,13 @@ let rec replace_tyvar (ty : typ) (tv : tVar) (replty : typ) : typ =
       ty
 
 (* given two LQS types, returns the combined type or returns error if there is a problem *)
-(* since things may be void, I made a helper for this *)
 (* TODO: figure out what to do with TQRef and TQAll here *)
+(* what is the difference between = and == here? *)
 let rec combine_types (ty1 : typ) (ty2 : typ) : typ =
   (* when would this case actually come up? *)
   match (ty1, ty2) with
-  | TTVar tvar1, TTVar tvar2 ->
-      if tvar1 == tvar2 then ty1 else failwith "type variable mismatch"
+  | TTVar tv1, TTVar tv2 ->
+      if tv1 = tv2 then ty1 else type_mismatch_error ty1 ty2
   | TQref _, TQref _ ->
       ty1
   | TQAll _, TQAll _ ->
@@ -261,8 +252,8 @@ let rec combine_types (ty1 : typ) (ty2 : typ) : typ =
   | TFun (in1, ou1), TFun (in2, ou2) ->
       TFun (combine_types in1 in2, combine_types ou1 ou2)
   | TAll (tv1, ou1), TAll (tv2, ou2) ->
-      if tv1 == tv2 then TAll (tv1, combine_types ou1 ou2)
-      else failwith "type variable mismatch"
+      if tv1 = tv2 then TAll (tv1, combine_types ou1 ou2)
+      else type_mismatch_error ty1 ty2
   | TCmd t1, TCmd t2 ->
       TCmd (combine_types t1 t2)
   | TProd (l1, r1), TFun (l2, r2) ->
@@ -272,7 +263,7 @@ let rec combine_types (ty1 : typ) (ty2 : typ) : typ =
   | TProd (l1, r1), TProd (l2, r2) ->
       TProd (combine_types l1 l2, combine_types r1 r2)
   | _ ->
-      if ty1 == ty2 then ty1
+      if ty1 = ty2 then ty1
       else
         failwith
           ( "type mismatch:\nty1: "
@@ -324,63 +315,79 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : exp =
 and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
   match calld with
   | CDFun (UIdent name, TAEmpty, ParTpl params, rettyp, body) ->
-      let rettyp', body' = curry [] params rettyp body env in
+      let rettyp', body' = curry params rettyp body [] env in
       (MVar (Ident name), rettyp', body')
   | CDFun (UIdent name, TAList tvars, ParTpl params, rettyp, body) ->
-      let rettyp', body' = curry tvars params rettyp body env in
+      let rettyp', body' = curry params rettyp body (elab_tyvars tvars) env in
       (MVar (Ident name), rettyp', body')
   (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
   | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) ->
-      let rettyp', body' = curry [] params rettyp body env in
+      let rettyp', body' = curry params rettyp body [] env in
       (MVar (Ident name), rettyp', body')
   | CDOp (UIdent name, TAList tvars, ParTpl params, rettyp, _, body) ->
-      let rettyp', body' = curry tvars params rettyp body env in
+      let rettyp', body' = curry params rettyp body (elab_tyvars tvars) env in
       (MVar (Ident name), rettyp', body')
+
+(* very simple function that translates the tIdents to tVars, basically just a map *)
+and elab_tyvars (tyvars : tIdent list) : tVar list =
+  match tyvars with
+  | [] ->
+      []
+  | tv :: tvs ->
+      let (TIdent tvstr) = tv in
+      MTVar (Ident tvstr) :: elab_tyvars tvs
+
+(* this just adds the tyvars to the output of curry *)
+and curry_tyvars (tyvars : tVar list) (ty : typ) (ex : exp) : typ * exp =
+  match tyvars with
+  | [] ->
+      (ty, ex)
+  | tv :: tvs ->
+      let ty', ex' = curry_tyvars tvs ty ex in
+      (TAll (tv, ty'), ETLam (tv, ex'))
 
 (* NOTE: curry returns a type here since it's pretty easy to get the type of the curried
    function, possibly easier than to use typeof? *)
-and curry (tyvars : tIdent list) (params : param list) (rettyp : tp)
-    (body : body) (env : env_t) : typ * exp =
-  match (tyvars, params) with
-  | tv :: tvs, _ ->
-      (* note that these four lines are the 'prep_param' for tyvar. Much simpler, so no helper *)
-      let (TIdent tvstr) = tv in
-      let tv' = MTVar (Ident tvstr) in
-      let tvars' = Strmap.add tvstr (TTVar tv') env.tvars in
-      let env' = {env with tvars= tvars'} in
-      let cur_ty, cur = curry tvs params rettyp body env' in
-      (TAll (tv', cur_ty), ETLam (tv', cur))
-  | [], [] ->
-      let typ' = TUnit in
-      let ty_body, pbody = elab_body body env in
-      let rettyp' = elab_type rettyp env in
-      ( TFun (typ', rettyp')
-      , ELam
-          ( typ'
-          , rettyp'
-          , wild_var (* TODO: might want to make this argument optional *)
-          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
-  | [], [ParNI (NItem (UIdent arg, typ))] ->
-      (* if typ is TQbit, have to do smth entirely different so this gets a bit annoying *)
-      let typ', env' = prep_param arg typ env in
-      let ty_body, pbody = elab_body body env' in
-      let rettyp' = elab_type rettyp env in
-      ( TFun (typ', combine_types rettyp' ty_body)
-        (* note that we check ty_body against rettyp' *)
-      , ELam
-          ( typ'
-          , rettyp'
-          , MVar (Ident arg)
-          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
-  | [], ParNI (NItem (UIdent arg, typ)) :: t ->
-      let typ', env' = prep_param arg typ env in
-      let cur_ty, cur = curry [] t rettyp body env' in
-      (TFun (typ', cur_ty), ELam (typ', cur_ty, MVar (Ident arg), cur))
-  | [], _ ->
-      nyi "Nested paramss (ParNIA)"
+and curry (params : param list) (rettyp : tp) (body : body) (tyvars : tVar list)
+    (env : env_t) : typ * exp =
+  match tyvars with
+  | tv :: tvs ->
+      let ty', ex' = curry params rettyp body tvs env in
+      (TAll (tv, ty'), ETLam (tv, ex'))
+  | [] -> (
+    match params with
+    | [] ->
+        let typ' = TUnit in
+        let ty_body, pbody = elab_body body env in
+        let rettyp' = elab_type rettyp tyvars env in
+        ( TFun (typ', rettyp')
+        , ELam
+            ( typ'
+            , rettyp'
+            , wild_var (* TODO: might want to make this argument optional *)
+            , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
+    | [ParNI (NItem (UIdent arg, typ))] ->
+        (* if typ is TQbit, have to do smth entirely different so this gets a bit annoying *)
+        let typ', env' = prep_param arg typ tyvars env in
+        let ty_body, pbody = elab_body body env' in
+        let rettyp' = elab_type rettyp tyvars env' in
+        ( TFun (typ', combine_types rettyp' ty_body)
+          (* note that we check ty_body against rettyp' *)
+        , ELam
+            ( typ'
+            , rettyp'
+            , MVar (Ident arg)
+            , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
+    | ParNI (NItem (UIdent arg, typ)) :: t ->
+        let typ', env' = prep_param arg typ tyvars env in
+        let cur_ty, cur = curry t rettyp body tyvars env' in
+        (TFun (typ', cur_ty), ELam (typ', cur_ty, MVar (Ident arg), cur))
+    | _ ->
+        nyi "Nested paramss (ParNIA)" )
 
 (* preps the param, to be used in curry *)
-and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
+and prep_param (arg : string) (argtyp : tp) (tyvars : tVar list) (env : env_t) :
+    typ * env_t =
   match argtyp with
   | TpQbit ->
       (*FIXME: should probably generate i a different way, but fine for now *)
@@ -399,7 +406,7 @@ and prep_param (arg : string) (argtyp : tp) (env : env_t) : typ * env_t =
       let env' = {env with qalls= qalls'; vars= vars'} in
       (qlisttype, env')
   | _ ->
-      let argtyp' = elab_type argtyp env in
+      let argtyp' = elab_type argtyp tyvars env in
       let vars' = Strmap.add arg argtyp' env.vars in
       let env' = {env with vars= vars'} in
       (argtyp', env')
@@ -590,7 +597,7 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
       | Right m1, Right m2 ->
           EIte
             ( combine_types t1 t2
-            , ( if typeof (Left cond') env == TBool then cond'
+            , ( if typeof (Left cond') env = TBool then cond'
                 (*TODO: make sure we should be checking this here! *)
               else failwith "expected bool, different type present" )
             , ECmd (t1, m1)
@@ -609,7 +616,7 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
       | Right m1, Right m2 ->
           EIte
             ( combine_types t1 t2
-            , ( if typeof (Left cond') env == TBool then cond'
+            , ( if typeof (Left cond') env = TBool then cond'
               else failwith "expected bool, different type present" )
             , ECmd (t1, m1)
             , ECmd (t2, m2) )
@@ -796,7 +803,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       let e2' = elab_exp e2 env in
       let t1 = typeof (Left e1') env in
       let t2 = typeof (Left e2') env in
-      if t1 == t2 then EIte (t1, elab_exp cond env, e1', e2')
+      if t1 = t2 then EIte (t1, elab_exp cond env, e1', e2')
       else failwith "Type error: QsECond"
   | QsERange (l, r) ->
       ERng (elab_exp l env, elab_exp r env)
@@ -838,35 +845,32 @@ and elab_app (func : exp) (args : expr list) (env : env_t) : exp =
       let f_to_e = elab_app func [e] env in
       elab_app f_to_e es env
 
-and elab_type (typ : tp) (env : env_t) : typ =
+and elab_type (typ : tp) (tyvars : tVar list) (env : env_t) : typ =
   match typ with
   | TpEmp ->
       nyi "(TEmp)"
-  | TpPar (TIdent tyarg) -> (
-    match Strmap.find_opt tyarg env.tvars with
-    | None ->
-        failwith "Undefined type variable"
-    | Some t ->
-        t )
+  | TpPar (TIdent tvstr) ->
+      if List.mem (MTVar (Ident tvstr)) tyvars then TTVar (MTVar (Ident tvstr))
+      else failwith "Undefined type variable"
   | TpUDT _ ->
       nyi "(TQNm)"
   | TpTpl typs -> (
     match typs with
     (*FIXME: this first case comes up some times, incorrectly I think, but just translating t seems to work well enough *)
     | [t] ->
-        elab_type t env
+        elab_type t tyvars env
     | [t1; t2] ->
-        TProd (elab_type t1 env, elab_type t2 env)
+        TProd (elab_type t1 tyvars env, elab_type t2 tyvars env)
     | _ ->
         failwith "only 2-ples are accepted" )
   | TpFun (ty1, ty2) ->
-      TFun (elab_type ty1 env, elab_type ty2 env)
+      TFun (elab_type ty1 tyvars env, elab_type ty2 tyvars env)
   (* TODO: is TOp the same type as TFun? *)
   | TpOp (ty1, ty2, chars) ->
-      TFun (elab_type ty1 env, elab_type ty2 env)
+      TFun (elab_type ty1 tyvars env, elab_type ty2 tyvars env)
       (*TODO: what to do with chars here? *)
   | TpArr typ ->
-      TArr (elab_type typ env)
+      TArr (elab_type typ tyvars env)
   | TpBInt ->
       nyi "(TBInt)"
   | TpBool ->
@@ -903,9 +907,7 @@ let elab_main () =
       ( "[Input abstract syntax]\n\n"
       ^ (fun x -> ShowQSharp.show (ShowQSharp.showDoc x)) in_ast
       ^ "\n\n" ) ;
-    let out_ast =
-      elab in_ast {qrefs= empty; qalls= empty; vars= empty; tvars= empty}
-    in
+    let out_ast = elab in_ast {qrefs= empty; qalls= empty; vars= empty} in
     print_string
       ( "[Output abstract syntax]\n\n"
       ^ (fun x -> ShowLambdaQs.show (ShowLambdaQs.showExp x)) out_ast
