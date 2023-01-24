@@ -27,9 +27,172 @@ open Strmap
 
 type env_t = {qrefs: int Strmap.t; qalls: int Strmap.t; vars: typ Strmap.t}
 
+(* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
+let rec extract_ifs (stmts : stm list) : stm list * stm list =
+  match stmts with
+  | SEIf (e, s) :: stmts' ->
+      let ifs, stmts'' = extract_ifs stmts' in
+      (SEIf (e, s) :: ifs, stmts'')
+  | SElse scope :: stmts' ->
+      ([SElse scope], stmts')
+  | _ ->
+      ([], stmts)
+
 (* takes T' -> (U' -> ... -> (t1 -> (t2 ... -> (tn -> tout)...) to ( [T',U'...], [t1,...,tout] ) *)
-let rec ignore_tyvars (ty : typ) : typ =
-  match ty with TAll (intv, outy) -> ignore_tyvars outy | _ -> ty
+let rec pullout_tyvars (ty : typ) : tVar list * typ =
+  match ty with
+  | TAll (intv, outy) ->
+      let tvs, ty' = pullout_tyvars outy in
+      (intv :: tvs, outy)
+  | _ ->
+      ([], ty)
+
+let rec pushin_tyvars (tvs : tVar list) (ty : typ) : typ =
+  match tvs with [] -> ty | tv :: tvs' -> TAll (tv, pushin_tyvars tvs' ty)
+
+(* takes T' -> (U' -> ... -> (t1 -> (t2 ... -> (tn -> tout)...) to ( [T',U'...], t1, (t2 ... -> (tn -> tout)...)) *)
+let rec decompose_fun_type (ty : typ) : tVar list * typ * typ =
+  match pullout_tyvars ty with
+  | tvs, TFun (inty, outy) ->
+      (tvs, inty, outy)
+  | _ ->
+      failwith
+        ( "expected function type, instead got: "
+        ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty) )
+
+(* could make the following into a single function with option type, but this is better for testing *)
+let rec contains_poly_type (ty : typ) : bool =
+  match ty with
+  | TTVar _ ->
+      true
+  | TQref k ->
+      false
+  | TQAll kv ->
+      false
+  | TFun (t1, t2) ->
+      contains_poly_type t1 || contains_poly_type t2
+  | TAll (tv, ty) ->
+      failwith "TODO: can this case occur?"
+  | TCmd t ->
+      contains_poly_type t
+  | TProd (t1, t2) ->
+      contains_poly_type t1 || contains_poly_type t2
+  | TArr t ->
+      contains_poly_type t
+  | _ ->
+      false
+
+(* returns ("T'", type to replace T' with) *)
+(* we assume contains_poly_type ty returns true *)
+(* could unify this with contains_poly_type but would require more checks on if types match *)
+
+let rec get_tyvar_replacements (ty : typ) (argty : typ) : (tVar * typ) list =
+  match (ty, argty) with
+  | TTVar tvar, _ ->
+      (* if we simply apply T' -> U' to T', then no replacement is made *)
+      if ty = argty then [] else [(tvar, argty)]
+  | TQref k, _ ->
+      []
+  | TQAll kv, TQref k ->
+      []
+  | TQAll kv, _ ->
+      []
+  | TFun (t1, t2), TFun (argty1, argty2) ->
+      get_tyvar_replacements t1 argty1 @ get_tyvar_replacements t2 argty2
+  | TAll (tv, ty), _ ->
+      failwith "TODO: can this case occur?"
+  | TCmd ty', TCmd argty' ->
+      get_tyvar_replacements ty' argty'
+  | TProd (t1, t2), TProd (argty1, argty2) ->
+      get_tyvar_replacements t1 argty1 @ get_tyvar_replacements t2 argty2
+  | TArr ty', TArr argty' ->
+      get_tyvar_replacements ty' argty'
+  | _ ->
+      []
+
+(*
+    let rec remove_dup_tvpairs (p : (tVar * typ)) (ps : (tVar * typ) list) : (tVar * typ) list =
+        match (p, ps) with
+        | ((tv, ty), []) -> []
+        | ((tv, ty), (tv', ty') :: ps') ->
+            if tv = tv'
+              then if ty = ty'
+                then ps
+                else failwith ("trying to replace type variable with two different types: \nty1: "
+                              ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty)
+                              ^ "\nty2: "
+                              ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty') )
+            else (tv', ty') :: remove_dup_tvpairs ps'
+*)
+
+let rec safe_replacement (replist : (tVar * typ) list) : (tVar * typ) list =
+  let rec remove_dup p ps =
+    match (p, ps) with
+    | (tv, ty), [] ->
+        []
+    | (tv, ty), (tv', ty') :: ps' ->
+        if tv = tv' then
+          if ty = ty' then ps
+          else
+            failwith
+              ( "trying to replace type variable with two different types: \n\
+                 ty1: "
+              ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty)
+              ^ "\nty2: "
+              ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty') )
+        else (tv', ty') :: remove_dup p ps'
+  in
+  match replist with [] -> [] | p :: ps -> p :: remove_dup p ps
+
+(* kind of like filter on tvs and map on tys, loops through funty and replaces tv with replty *)
+let rec replace_single_tyvar (funty : typ) (tv : tVar) (replty : typ) : typ =
+  match funty with
+  (* at this step, we filter out the tv that is being replaced *)
+  (* uses monomorphization of polymorphic types *)
+  | TAll (tv', ty) ->
+      if tv = tv' then ty else TAll (tv', replace_single_tyvar ty tv replty)
+  (* then we map, should never see TAll after this point *)
+  | TFun (ty1, ty2) ->
+      TFun
+        (replace_single_tyvar ty1 tv replty, replace_single_tyvar ty2 tv replty)
+  | TTVar tv' ->
+      if tv' = tv then replty else funty
+  | TCmd ty1 ->
+      TCmd (replace_single_tyvar ty1 tv replty)
+  | TProd (ty1, ty2) ->
+      TProd
+        (replace_single_tyvar ty1 tv replty, replace_single_tyvar ty2 tv replty)
+  | TArr ty1 ->
+      TArr (replace_single_tyvar ty1 tv replty)
+  | _ ->
+      funty
+
+(*
+  (* this is not used, but if we want a more complex checker, then could use this in replace_single_tyvar*)
+  let rec replace_single_type_with_single_tyvar (argty : typ) (tv : tVar) (replty : typ) : typ =
+    match argty with
+    | TTVar tv' ->
+        if tv' = tv then replty else argty
+    | TFun (ty1, ty2) ->
+      TFun (replace_single_tyvar ty1 tv replty, replace_single_tyvar ty2 tv replty)
+    | TAll (tv, ty) ->
+        failwith "TODO: probably will never see this case"
+    | TCmd ty1 ->
+        TCmd (replace_single_tyvar ty1 tv replty)
+    | TProd (ty1, ty2) ->
+        TProd (replace_single_tyvar ty1 tv replty, replace_single_tyvar ty2 tv replty)
+    | TArr ty1 ->
+        TArr (replace_single_tyvar ty1 tv replty)
+    | _ ->
+        argty
+  *)
+
+let rec replace_tyvars (funty : typ) (tvreps : (tVar * typ) list) : typ =
+  match tvreps with
+  | [] ->
+      funty
+  | (tv, replty) :: tvreps' ->
+      replace_tyvars (replace_single_tyvar funty tv replty) tvreps'
 
 (* given two LQS types, returns the combined type or returns error if there is a problem *)
 (* what is the difference between = and == here? *)
@@ -57,13 +220,7 @@ let rec equal_types (ty1 : typ) (ty2 : typ) : typ =
   | TProd (l1, r1), TProd (l2, r2) ->
       TProd (equal_types l1 l2, equal_types r1 r2)
   | _ ->
-      if ty1 = ty2 then ty1
-      else
-        failwith
-          ( "type mismatch:\nty1: "
-          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty1)
-          ^ "\nty2: "
-          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty2) )
+      if ty1 = ty2 then ty1 else type_mismatch_error ty1 ty2
 
 (* note that as long as TDummy never occurs as an output of typeof, we know it will never occur in the final tree *)
 let rec typeof (term : lqsterm) (env : env_t) : typ =
@@ -84,19 +241,10 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
       TAll (tv, typeof (Left exp) env)
   (* note that when we build the Eap, we add the types, so t1 and t2 will be the correct form *)
   | Left (EAp (t1, t2, e1, e2)) -> (
-    match ignore_tyvars t1 with
-    | TFun (inty, outy) ->
-        let _ = equal_types inty t2 in
-        outy
-    (*FIXME: eventually add checker *)
-    (* if inty == t2 then outy
-       else failwith "type mismatch in function application" *)
-    (* FIXME: deal with partial application case, don't we lose some tvs? *)
-    (* since the type is built correctly is elab_app, we just pass to the above case *)
-    | _ ->
-        failwith
-          ( "expected function type, instead got: "
-          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp t1) ) )
+    match decompose_fun_type t1 with
+    (* since e2 has all instantiated variables, we dont need to worry about tyvars here *)
+    | tvs, inty, outy ->
+        pushin_tyvars tvs outy )
   (* NOTE: this is a rare case *)
   | Left (ETAp (tv, ty, e1, e2)) ->
       failwith "TODO: ETAp"
@@ -183,95 +331,6 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
       TUnit
   | Right (CMeas _) ->
       TInt
-
-(* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
-let rec extract_ifs (stmts : stm list) : stm list * stm list =
-  match stmts with
-  | SEIf (e, s) :: stmts' ->
-      let ifs, stmts'' = extract_ifs stmts' in
-      (SEIf (e, s) :: ifs, stmts'')
-  | SElse scope :: stmts' ->
-      ([SElse scope], stmts')
-  | _ ->
-      ([], stmts)
-
-(* takes T' -> (U' -> ... -> (t1 -> (t2 ... -> (tn -> tout)...) to ( [T',U'...], [t1,...,tout] ) *)
-let rec extract_fun_type (ty : typ) : tVar list * typ list =
-  match ty with
-  | TFun (inty, outy) ->
-      let tvs, tys = extract_fun_type outy in
-      (tvs, inty :: tys)
-  | TAll (intv, outy) ->
-      let tvs, tys = extract_fun_type outy in
-      (intv :: tvs, tys)
-  (* if neither of the two cases are hit, we assume we have reached the outy *)
-  | _ ->
-      ([], [ty])
-
-let rec build_fun_type (tvs : tVar list) (tys : typ list) : typ =
-  match tvs with
-  | [] -> (
-    match tys with
-    | [] ->
-        failwith "function type must contain at least one input and one output"
-    | [e] ->
-        failwith "function type must contain at least one input and one output"
-    | [t1; t2] ->
-        TFun (t1, t2)
-    | ty :: tys' ->
-        TFun (ty, build_fun_type [] tys') )
-  | tv :: tvs' ->
-      TAll (tv, build_fun_type tvs' tys)
-
-(* could make the following into a single function with option type, but this is better for testing *)
-let rec contains_poly_type (ty : typ) : bool =
-  match ty with
-  | TTVar _ ->
-      true
-  | TQref k ->
-      false
-  | TQAll kv ->
-      false
-  | TFun (t1, t2) ->
-      contains_poly_type t1 || contains_poly_type t2
-  | TAll (tv, ty) ->
-      failwith "TODO: can this case occur?"
-  | TCmd t ->
-      contains_poly_type t
-  | TProd (t1, t2) ->
-      contains_poly_type t1 || contains_poly_type t2
-  | TArr t ->
-      contains_poly_type t
-  | _ ->
-      false
-
-(* returns ("T'", type to replace T' with) *)
-(*TODO: finish this function *)
-let rec match_poly_type (ty : typ) (argty : typ) : tVar * typ =
-  match (ty, argty) with
-  | TTVar tvar, argty ->
-      (tvar, argty)
-  | TArr ty', TArr argty' ->
-      match_poly_type ty' argty'
-  | _ ->
-      failwith "TODO"
-
-let rec replace_tyvar (ty : typ) (tv : tVar) (replty : typ) : typ =
-  match ty with
-  | TTVar tv' ->
-      if tv = tv' then replty else ty
-  | TFun (ty1, ty2) ->
-      TFun (replace_tyvar ty1 tv replty, replace_tyvar ty2 tv replty)
-  | TAll (tv, ty) ->
-      failwith "TODO: "
-  | TCmd ty1 ->
-      TCmd (replace_tyvar ty1 tv replty)
-  | TProd (ty1, ty2) ->
-      TProd (replace_tyvar ty1 tv replty, replace_tyvar ty2 tv replty)
-  | TArr ty1 ->
-      TArr (replace_tyvar ty1 tv replty)
-  | _ ->
-      ty
 
 (* elab takes in the the program and the environment composed of the
    signature and context *)
@@ -825,27 +884,23 @@ and elab_app (func : exp) (args : expr list) (env : env_t) : exp =
   match args with
   | [] ->
       failwith "applying function to zero arguments"
-  | [e] -> (
+  | [e] ->
       (*FIXME: deal with type inference here *)
       let e' = elab_exp e env in
       let argty = typeof (Left e') env in
       let funty = typeof (Left func) env in
-      let tvs, argtys = extract_fun_type funty in
-      match argtys with
-      | [] ->
-          failwith
-            "function type must contain at least one input and one output"
-      | arg1 :: argtys' ->
-          if contains_poly_type arg1 then
-            let tvstr, replty = match_poly_type arg1 argty in
-            (* this line uses monomorphization of polymorphic types *)
-            let tvs' = List.filter (fun tv -> tv != tvstr) tvs in
-            let argtys' =
-              List.map (fun ty -> replace_tyvar ty tvstr replty) argtys
-            in
-            EAp (build_fun_type tvs' argtys', argty, func, e')
-          else EAp (funty, argty, func, e') )
+      let tvs, arg1ty, outy = decompose_fun_type funty in
+      if contains_poly_type arg1ty then
+        let reppairs = safe_replacement (get_tyvar_replacements arg1ty argty) in
+        EAp (replace_tyvars funty reppairs, arg1ty, func, e')
+        (*TODO: add subtyping at this next step *)
+      else
+        (* this is where we ensure that arg1 and argty are the same *)
+        (*TODO: replace this with subtyping *)
+        let arg1ty' = equal_types arg1ty argty in
+        EAp (funty, arg1ty', func, e')
   | e :: es ->
+      (* we only look at types, so the fact that the exp looks akward is fine for the recursion *)
       let f_to_e = elab_app func [e] env in
       elab_app f_to_e es env
 
