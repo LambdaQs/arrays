@@ -150,13 +150,14 @@ let rec replace_single_tyvar (funty : typ) (tv : tVar) (replty : typ) : typ =
   (* at this step, we filter out the tv that is being replaced *)
   (* uses monomorphization of polymorphic types *)
   | TAll (tv', ty) ->
-      if tv = tv' then ty else TAll (tv', replace_single_tyvar ty tv replty)
+      if tv = tv' then replace_single_tyvar ty tv replty
+      else TAll (tv', replace_single_tyvar ty tv replty)
   (* then we map, should never see TAll after this point *)
   | TFun (ty1, ty2) ->
       TFun
         (replace_single_tyvar ty1 tv replty, replace_single_tyvar ty2 tv replty)
   | TTVar tv' ->
-      if tv' = tv then replty else funty
+      if tv = tv' then replty else funty
   | TCmd ty1 ->
       TCmd (replace_single_tyvar ty1 tv replty)
   | TProd (ty1, ty2) ->
@@ -892,6 +893,10 @@ and elab_app (func : exp) (args : expr list) (env : env_t) : exp =
       let tvs, arg1ty, outy = decompose_fun_type funty in
       if contains_poly_type arg1ty then
         let reppairs = safe_replacement (get_tyvar_replacements arg1ty argty) in
+        (* match reppairs with
+           | [(tv, ty)] -> type_mismatch_error (TTVar tv) (replace_single_tyvar funty tv ty)
+           | _ -> failwith "???" *)
+        (* if (List.length reppairs = 1) then failwith "w" else failwith "y)" *)
         EAp (replace_tyvars funty reppairs, arg1ty, func, e')
         (*TODO: add subtyping at this next step *)
       else
