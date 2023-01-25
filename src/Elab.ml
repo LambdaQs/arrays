@@ -120,7 +120,8 @@ let rec get_tyvar_replacements (ty : typ) (argty : typ) : (tVar * typ) list =
   | TTVar tvar, _ ->
       (* if we simply apply T' -> U' to T', then no replacement is made *)
       (* FIXME: this seems wrong, actually, but won't affect most cases *)
-      if ty = argty then [] else [(tvar, argty)]
+      (* TODO: use fresh vars to fix *)
+      [(tvar, argty)]
   | TQref k, TQref k' ->
       []
   | TQAll kv, TQref k ->
@@ -730,6 +731,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
   | QsEArr es -> (
     match es with
     | [] ->
+        (* FIXME: how to do type inference here? *)
         EArrNew (TUnit, EInt 0, [])
     | e :: es' ->
         let ty = typeof (Left (elab_exp e env)) env in
@@ -866,7 +868,7 @@ and elab_app (func : exp) (args : expr list) (env : env_t) : exp =
            | [(tv, ty)] -> type_mismatch_error (TTVar tv) (replace_single_tyvar funty tv ty)
            | _ -> failwith "???" *)
         (* if (List.length reppairs = 1) then failwith "w" else failwith "y)" *)
-        EAp (replace_tyvars funty reppairs, arg1ty, func, e')
+        EAp (replace_tyvars funty reppairs, argty, func, e')
         (*TODO: add subtyping at this next step *)
       else
         (* this is where we ensure that arg1 and argty are the same *)
@@ -884,7 +886,7 @@ and elab_type (typ : tp) (tyvars : tVar list) (env : env_t) : typ =
       nyi "(TEmp)"
   | TpPar (TIdent tvstr) ->
       if List.mem (MTVar (Ident tvstr)) tyvars then TTVar (MTVar (Ident tvstr))
-      else failwith "Undefined type variable"
+      else failwith ("Undefined type variable: " ^ tvstr)
   | TpUDT _ ->
       nyi "(TQNm)"
   | TpTpl typs -> (
