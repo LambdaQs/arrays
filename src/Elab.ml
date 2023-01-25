@@ -27,6 +27,35 @@ open Strmap
 
 type env_t = {qrefs: int Strmap.t; qalls: int Strmap.t; vars: typ Strmap.t}
 
+(* checks if two types are equal *)
+let rec equal_types_bool (ty1 : typ) (ty2 : typ) : bool =
+  (* when would this case actually come up? *)
+  match (ty1, ty2) with
+  | TTVar tv1, TTVar tv2 ->
+      tv1 = tv2
+  | TQref q1, TQref q2 ->
+      q1 = q2
+  | TQAll _, TQAll _ ->
+      true (* TODO: figure out what to do with TQRef and TQAll here *)
+  | TFun (in1, ou1), TFun (in2, ou2) ->
+      equal_types_bool in1 in2 && equal_types_bool ou1 ou2
+  | TAll (tv1, ou1), TAll (tv2, ou2) ->
+      (*TODO: what about <T'> -> f(T') vs <U'> -> f(U'), technically these types should be equal *)
+      tv1 = tv2 && equal_types_bool ou1 ou2
+  | TCmd t1, TCmd t2 ->
+      equal_types_bool t1 t2
+  | TProd (l1, r1), TProd (l2, r2) ->
+      equal_types_bool l1 l2 && equal_types_bool r1 r2
+  | TArr t1, TArr t2 ->
+      equal_types_bool t1 t2
+  | _ ->
+      ty1 = ty2
+
+(* given two LQS types, returns the combined type or returns error if there is a problem *)
+(* favors ty1 *)
+let rec equal_types (ty1 : typ) (ty2 : typ) : typ =
+  if equal_types_bool ty1 ty2 then ty1 else type_mismatch_error ty1 ty2
+
 (* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
 let rec extract_ifs (stmts : stm list) : stm list * stm list =
   match stmts with
@@ -43,10 +72,11 @@ let rec pullout_tyvars (ty : typ) : tVar list * typ =
   match ty with
   | TAll (intv, outy) ->
       let tvs, ty' = pullout_tyvars outy in
-      (intv :: tvs, outy)
+      (intv :: tvs, ty')
   | _ ->
       ([], ty)
 
+(* does the opposite of pullout_tyvars, for putting the type back together *)
 let rec pushin_tyvars (tvs : tVar list) (ty : typ) : typ =
   match tvs with [] -> ty | tv :: tvs' -> TAll (tv, pushin_tyvars tvs' ty)
 
@@ -55,10 +85,10 @@ let rec decompose_fun_type (ty : typ) : tVar list * typ * typ =
   match pullout_tyvars ty with
   | tvs, TFun (inty, outy) ->
       (tvs, inty, outy)
-  | _ ->
+  | tvs, ty' ->
       failwith
         ( "expected function type, instead got: "
-        ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty) )
+        ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty') )
 
 (* could make the following into a single function with option type, but this is better for testing *)
 let rec contains_poly_type (ty : typ) : bool =
@@ -85,17 +115,17 @@ let rec contains_poly_type (ty : typ) : bool =
 (* returns ("T'", type to replace T' with) *)
 (* we assume contains_poly_type ty returns true *)
 (* could unify this with contains_poly_type but would require more checks on if types match *)
-
 let rec get_tyvar_replacements (ty : typ) (argty : typ) : (tVar * typ) list =
   match (ty, argty) with
   | TTVar tvar, _ ->
       (* if we simply apply T' -> U' to T', then no replacement is made *)
+      (* FIXME: this seems wrong, actually, but won't affect most cases *)
       if ty = argty then [] else [(tvar, argty)]
-  | TQref k, _ ->
+  | TQref k, TQref k' ->
       []
   | TQAll kv, TQref k ->
       []
-  | TQAll kv, _ ->
+  | TQAll kv, TQAll kv' ->
       []
   | TFun (t1, t2), TFun (argty1, argty2) ->
       get_tyvar_replacements t1 argty1 @ get_tyvar_replacements t2 argty2
@@ -108,23 +138,9 @@ let rec get_tyvar_replacements (ty : typ) (argty : typ) : (tVar * typ) list =
   | TArr ty', TArr argty' ->
       get_tyvar_replacements ty' argty'
   | _ ->
-      []
+      if ty = argty then [] else type_mismatch_error ty argty
 
-(*
-    let rec remove_dup_tvpairs (p : (tVar * typ)) (ps : (tVar * typ) list) : (tVar * typ) list =
-        match (p, ps) with
-        | ((tv, ty), []) -> []
-        | ((tv, ty), (tv', ty') :: ps') ->
-            if tv = tv'
-              then if ty = ty'
-                then ps
-                else failwith ("trying to replace type variable with two different types: \nty1: "
-                              ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty)
-                              ^ "\nty2: "
-                              ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty') )
-            else (tv', ty') :: remove_dup_tvpairs ps'
-*)
-
+(* checks that we don't overload type variables *)
 let rec safe_replacement (replist : (tVar * typ) list) : (tVar * typ) list =
   let rec remove_dup p ps =
     match (p, ps) with
@@ -135,7 +151,8 @@ let rec safe_replacement (replist : (tVar * typ) list) : (tVar * typ) list =
           if ty = ty' then ps
           else
             failwith
-              ( "trying to replace type variable with two different types: \n\
+              ( "trying to replace a single type variable with two different \
+                 types: \n\
                  ty1: "
               ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty)
               ^ "\nty2: "
@@ -168,60 +185,12 @@ let rec replace_single_tyvar (funty : typ) (tv : tVar) (replty : typ) : typ =
   | _ ->
       funty
 
-(*
-  (* this is not used, but if we want a more complex checker, then could use this in replace_single_tyvar*)
-  let rec replace_single_type_with_single_tyvar (argty : typ) (tv : tVar) (replty : typ) : typ =
-    match argty with
-    | TTVar tv' ->
-        if tv' = tv then replty else argty
-    | TFun (ty1, ty2) ->
-      TFun (replace_single_tyvar ty1 tv replty, replace_single_tyvar ty2 tv replty)
-    | TAll (tv, ty) ->
-        failwith "TODO: probably will never see this case"
-    | TCmd ty1 ->
-        TCmd (replace_single_tyvar ty1 tv replty)
-    | TProd (ty1, ty2) ->
-        TProd (replace_single_tyvar ty1 tv replty, replace_single_tyvar ty2 tv replty)
-    | TArr ty1 ->
-        TArr (replace_single_tyvar ty1 tv replty)
-    | _ ->
-        argty
-  *)
-
 let rec replace_tyvars (funty : typ) (tvreps : (tVar * typ) list) : typ =
   match tvreps with
   | [] ->
       funty
   | (tv, replty) :: tvreps' ->
       replace_tyvars (replace_single_tyvar funty tv replty) tvreps'
-
-(* given two LQS types, returns the combined type or returns error if there is a problem *)
-(* what is the difference between = and == here? *)
-let rec equal_types (ty1 : typ) (ty2 : typ) : typ =
-  (* when would this case actually come up? *)
-  match (ty1, ty2) with
-  | TTVar tv1, TTVar tv2 ->
-      if tv1 = tv2 then ty1 else type_mismatch_error ty1 ty2
-  | TQref q1, TQref q2 ->
-      (*TODO: see if this causes any errors *)
-      if q1 = q2 then ty1 else type_mismatch_error ty1 ty2
-  | TQAll _, TQAll _ ->
-      ty1 (* TODO: figure out what to do with TQRef and TQAll here *)
-  | TFun (in1, ou1), TFun (in2, ou2) ->
-      TFun (equal_types in1 in2, equal_types ou1 ou2)
-  | TAll (tv1, ou1), TAll (tv2, ou2) ->
-      if tv1 = tv2 then TAll (tv1, equal_types ou1 ou2)
-      else type_mismatch_error ty1 ty2
-  | TCmd t1, TCmd t2 ->
-      TCmd (equal_types t1 t2)
-  | TProd (l1, r1), TFun (l2, r2) ->
-      TProd (equal_types l1 l2, equal_types r1 r2)
-  | TArr t1, TArr t2 ->
-      TArr (equal_types t1 t2)
-  | TProd (l1, r1), TProd (l2, r2) ->
-      TProd (equal_types l1 l2, equal_types r1 r2)
-  | _ ->
-      if ty1 = ty2 then ty1 else type_mismatch_error ty1 ty2
 
 (* note that as long as TDummy never occurs as an output of typeof, we know it will never occur in the final tree *)
 let rec typeof (term : lqsterm) (env : env_t) : typ =
