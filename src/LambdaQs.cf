@@ -42,6 +42,7 @@ ETrue.    Exp ::= "true";
 EFls.     Exp ::= "false";
 EIte.     Exp ::= "if" "[" Typ "]" "(" Exp ";" Exp ";" Exp ")";
 ENot.     Exp ::= "not" Exp;
+-- FIXME: should exp be int in EArrNew? Only ints end up occuring in Elab
 EArrNew.  Exp ::= "anew" "[" Typ "]" "(" Exp ";" [Exp] ")";                -- new array,   e.g. let a be anew[int](3; [1,2,3])
 EArrRep.  Exp ::= "arepeat" "[" Typ "]" "(" Exp ";" Exp ")";               -- array of repeated elem, first number is size to be consisten with EArrC
 EArrIdx.  Exp ::= "aidx" "[" Typ "]" "(" Exp ";" Exp ")";                  -- array index, e.g. aidx[int](a; 1) gets the 2nd elem in a

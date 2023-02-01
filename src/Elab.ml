@@ -444,6 +444,33 @@ and prep_param (arg : string) (argtyp : tp) (tyvars : tVar list) (env : env_t) :
       let env' = {env with vars= vars'} in
       (argtyp', env')
 
+(* nice helper, that is specialized for let bindings with qubits *)
+(* the returned exp is the binding expression *)
+and prep_qubit_bind (qvar : string) (q : qbitInit) (env : env_t) :
+    typ * exp * env_t =
+  match q with
+  | QInitS ->
+      let i = cardinal env.qrefs in
+      let qtype = TQref (MKey (Ident (string_of_int i))) in
+      (*this seems pretty redundant, but is perhaps helpful *)
+      let qrefs' = Strmap.add qvar i env.qrefs in
+      let vars' = Strmap.add qvar qtype env.vars in
+      let env' = {env with qrefs= qrefs'; vars= vars'} in
+      (qtype, EQloc (MKey (Ident (string_of_int i))), env')
+  | QInitA len ->
+      let len' = elab_exp len env in
+      let _ = equal_types (typeof (Left len') env) TInt in
+      let i = cardinal env.qalls in
+      let qltype = TArr (TQAll (MKVar (Ident (string_of_int i)))) in
+      (*this seems pretty redundant, but is perhaps helpful *)
+      let qalls' = Strmap.add qvar i env.qalls in
+      let vars' = Strmap.add qvar qltype env.vars in
+      let env' = {env with qalls= qalls'; vars= vars'} in
+      (*TODO: what goes in the list here? *)
+      (qltype, EArrNew (TQAll (MKVar (Ident (string_of_int i))), len', []), env')
+  | QInitT qs ->
+      failwith "TODO"
+
 and elab_body (body : body) (env : env_t) : typ * lqsterm =
   match body with
   | BSpec (SSpec (SNBody, SGIntr) :: _) ->
@@ -525,8 +552,6 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
       let ite = elab_ite (SIf (exp, scope) :: ites) env in
       match stmts'' with
       | [] ->
-          (* or should ite always be an exp. this seems a bit nicer, we don't need to put it in a cmd just because,
-             the returns within will be encapsulated *)
           Left ite
       | _ -> (
         match s with
@@ -557,42 +582,19 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
   | SApply scope :: stms' ->
       nyi "statement SApply"
   | SUse (QBnd (bnd, qbitInit)) :: stms' -> (
-    match qbitInit with
-    | QInitS -> (
-      match bnd with
-      | BndWild ->
-          failwith "Must bind Qubit to a variable"
-          (* TODO: should this be an error? *)
-      | BndName (UIdent var) -> (
-          let i = cardinal env.qrefs in
-          let qtype = TQref (MKey (Ident (string_of_int i))) in
-          let qrefs' = Strmap.add var i env.qrefs in
-          let vars' = Strmap.add var qtype env.vars in
-          let env' = {env with qrefs= qrefs'; vars= vars'} in
-          let s = elab_stmts stms' env' in
-          match s with
-          | Left e_s ->
-              Right
-                (CBnd
-                   ( qtype
-                   , typeof s env'
-                   , EQloc (MKey (Ident (string_of_int i)))
-                   , MVar (Ident var)
-                   , CRet (typeof s env, e_s) ) )
-          | Right m_s ->
-              Right
-                (CBnd
-                   ( qtype
-                   , typeof s env'
-                   , EQloc (MKey (Ident (string_of_int i)))
-                   , MVar (Ident var)
-                   , m_s ) ) )
-      | BndTplA bnds ->
-          failwith "mismatch in number of binds" )
-    | QInitA num ->
-        nyi "(QInitA)"
-    | QInitT qs ->
-        nyi "(QInitT)" )
+    match bnd with
+    | BndWild ->
+        failwith "Must bind Qubit to a variable, otherwise they are wasted"
+    | BndName (UIdent var) ->
+        let qtype, qexp, env' = prep_qubit_bind var qbitInit env in
+        let s = elab_stmts stms' env' in
+        let s_ty = typeof s env' in
+        let s_cmd =
+          match s with Left e_s -> CRet (s_ty, e_s) | Right m_s -> m_s
+        in
+        Right (CBnd (qtype, s_ty, qexp, MVar (Ident var), s_cmd))
+    | BndTplA bnds ->
+        failwith "mismatch in number of binds" )
   | SUseS (qbitBnd, scope) :: stms' ->
       nyi "statement SUseS"
 
@@ -601,8 +603,10 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
 (* TODO: make use of equal_types to avoid repeated code *)
 and elab_ite (stmts : stm list) (env : env_t) : exp =
   match stmts with
+  (* first two branches are degenerate case when no else, so nothing happens, i.e., we return ETriv *)
   | [SIf (cond, Scp stmts')] -> (
       let cond' = elab_exp cond env in
+      let _ = equal_types (typeof (Left cond') env) TBool in
       let s1 = elab_stmts stmts' env in
       match s1 with
       | Left e1 ->
@@ -612,14 +616,17 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
   (* note that the first two branched are the same *)
   | [SEIf (cond, Scp stmts')] -> (
       let cond' = elab_exp cond env in
+      let _ = equal_types (typeof (Left cond') env) TBool in
       let s1 = elab_stmts stmts' env in
       match s1 with
       | Left e1 ->
           EIte (typeof s1 env, cond', e1, ETriv)
       | Right m1 ->
           EIte (typeof s1 env, cond', ECmd (typeof s1 env, m1), ETriv) )
+  (* these are the real base cases*)
   | [SIf (cond, Scp stmts1); SElse (Scp stmts2)] -> (
       let cond' = elab_exp cond env in
+      let _ = equal_types (typeof (Left cond') env) TBool in
       let s1 = elab_stmts stmts1 env in
       let s2 = elab_stmts stmts2 env in
       let t1 = typeof s1 env in
@@ -628,17 +635,12 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
       | Left e1, Left e2 ->
           EIte (equal_types t1 t2, cond', e1, e2)
       | Right m1, Right m2 ->
-          EIte
-            ( equal_types t1 t2
-            , ( if typeof (Left cond') env = TBool then cond'
-                (*TODO: make sure we should be checking this here! *)
-              else failwith "expected bool, different type present" )
-            , ECmd (t1, m1)
-            , ECmd (t2, m2) )
+          EIte (equal_types t1 t2, cond', ECmd (t1, m1), ECmd (t2, m2))
       | _ ->
           failwith "branches cannot be different types" )
   | [SEIf (cond, Scp stmts1); SElse (Scp stmts2)] -> (
       let cond' = elab_exp cond env in
+      let _ = equal_types (typeof (Left cond') env) TBool in
       let s1 = elab_stmts stmts1 env in
       let s2 = elab_stmts stmts2 env in
       let t1 = typeof s1 env in
@@ -647,16 +649,12 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
       | Left e1, Left e2 ->
           EIte (equal_types t1 t2, cond', e1, e2)
       | Right m1, Right m2 ->
-          EIte
-            ( equal_types t1 t2
-            , ( if typeof (Left cond') env = TBool then cond'
-              else failwith "expected bool, different type present" )
-            , ECmd (t1, m1)
-            , ECmd (t2, m2) )
+          EIte (equal_types t1 t2, cond', ECmd (t1, m1), ECmd (t2, m2))
       | _ ->
           failwith "branches cannot be different types" )
   | SIf (cond, Scp stmts1) :: stmts' -> (
       let cond' = elab_exp cond env in
+      let _ = equal_types (typeof (Left cond') env) TBool in
       let s1 = elab_stmts stmts1 env in
       let t1 = typeof s1 env in
       let stmts'' = elab_ite stmts' env in
@@ -671,6 +669,7 @@ and elab_ite (stmts : stm list) (env : env_t) : exp =
             , stmts'' ) )
   | SEIf (cond, Scp stmts1) :: stmts' -> (
       let cond' = elab_exp cond env in
+      let _ = equal_types (typeof (Left cond') env) TBool in
       let s1 = elab_stmts stmts1 env in
       let t1 = typeof s1 env in
       let stmts'' = elab_ite stmts' env in
@@ -699,7 +698,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
   | QsEInt (Integ i) ->
       EInt (int_of_string i)
   | QsEBInt (BigInt i) ->
-      EInt (int_of_string i) (*FIXME: should this also just be int? *)
+      EInt (int_of_string i)
   | QsEDbl (Doubl i) ->
       EDbl (float_of_string i)
   | QsEStr str ->
@@ -718,7 +717,8 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       failwith "TODO: QsEPli"
   | QsETp [e] ->
       (* FIXME: like below in elab type, this maybe should be illegal, but can just turn to normal exp *)
-      elab_exp e env
+      (*elab_exp e env *)
+      failwith "1-ples not allowed (testing for fix)"
   | QsETp [e1; e2] ->
       let e1' = elab_exp e1 env in
       let e2' = elab_exp e2 env in
@@ -837,8 +837,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       let e2' = elab_exp e2 env in
       let t1 = typeof (Left e1') env in
       let t2 = typeof (Left e2') env in
-      if t1 = t2 then EIte (t1, elab_exp cond env, e1', e2')
-      else failwith "Type error: QsECond"
+      EIte (equal_types t1 t2, elab_exp cond env, e1', e2')
   | QsERange (l, r) ->
       ERng (elab_exp l env, elab_exp r env)
   | QsERangeR l ->
