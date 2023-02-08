@@ -35,8 +35,8 @@ let rec equal_types_bool (ty1 : typ) (ty2 : typ) : bool =
       tv1 = tv2
   | TQref q1, TQref q2 ->
       q1 = q2
-  | TQAll _, TQAll _ ->
-      true (* TODO: figure out what to do with TQRef and TQAll here *)
+  | TQAll k1, TQAll k2 ->
+      k1 = k2 (* TODO: figure out what to do with TQRef and TQAll here *)
   | TFun (in1, ou1), TFun (in2, ou2) ->
       equal_types_bool in1 in2 && equal_types_bool ou1 ou2
   | TAll (tv1, ou1), TAll (tv2, ou2) ->
@@ -50,6 +50,16 @@ let rec equal_types_bool (ty1 : typ) (ty2 : typ) : bool =
       equal_types_bool t1 t2
   | _ ->
       ty1 = ty2
+
+let rec checkfor_dup_qubits (tys : typ list) : bool =
+  let rec check_dups (t, ts) =
+    match ts with
+    | [] ->
+        false
+    | t1 :: ts' ->
+        equal_types_bool t t1 || check_dups (t, ts')
+  in
+  match tys with [] -> false | t :: ts -> check_dups (t, ts)
 
 (* given two LQS types, returns the combined type or returns error if there is a problem *)
 (* favors ty1 *)
@@ -149,12 +159,12 @@ let rec safe_replacement (replist : (tVar * typ) list) : (tVar * typ) list =
         []
     | (tv, ty), (tv', ty') :: ps' ->
         if tv = tv' then
-          if ty = ty' then ps
+          if ty = ty' then remove_dup p ps'
           else
             failwith
               ( "trying to replace a single type variable with two different \
-                 types: \n\
-                 ty1: "
+                 types: \n\n\
+                \                 ty1: "
               ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty)
               ^ "\nty2: "
               ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty') )
@@ -346,6 +356,7 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : exp =
 (*JZ: we say let f = ..body.. in ..m.., so the type of m may have nothing to do with f *)
 
 (* FIXME: could make this with curry, curry_tyvars in a nicer way, but this works for now *)
+(*TODO: TODO: check rety against type of body and get NewQubit() example to fail *)
 and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
   match calld with
   | CDFun (UIdent name, TAEmpty, ParTpl params, rettyp, body) ->
@@ -457,6 +468,8 @@ and prep_qubit_bind (qvar : string) (q : qbitInit) (env : env_t) :
       let vars' = Strmap.add qvar qtype env.vars in
       let env' = {env with qrefs= qrefs'; vars= vars'} in
       (qtype, EQloc (MKey (Ident (string_of_int i))), env')
+  (* FIXME: should not be qalls, since we are creating len specific qubits *)
+  (* FIXME: !!!!!!! figure out this case, since it is the whole point of qsharp-arrays *)
   | QInitA len ->
       let len' = elab_exp len env in
       let _ = equal_types (typeof (Left len') env) TInt in
@@ -592,7 +605,7 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
         let s_cmd =
           match s with Left e_s -> CRet (s_ty, e_s) | Right m_s -> m_s
         in
-        Right (CBnd (qtype, s_ty, qexp, MVar (Ident var), s_cmd))
+        Right (CNew (s_ty, MVar (Ident var), s_cmd))
     | BndTplA bnds ->
         failwith "mismatch in number of binds" )
   | SUseS (qbitBnd, scope) :: stms' ->
@@ -795,7 +808,11 @@ and elab_exp (exp : expr) (env : env_t) : exp =
         failwith "Length takes 1 argument" )
   | QsECall (func, es) ->
       let func' = elab_exp func env in
-      elab_app func' es env
+      let es' = List.map (fun e -> elab_exp e env) es in
+      let tys = List.map (fun e -> typeof (Left e) env) es' in
+      if checkfor_dup_qubits tys (*TODO: add better error message *) then
+        failwith "clone error!"
+      else elab_app func' es' env
   | QsEPos _ ->
       failwith "TODO: QsEPos"
   | QsENeg _ ->
@@ -851,14 +868,15 @@ and elab_exp (exp : expr) (env : env_t) : exp =
 
 (* separate helper for function application to deal with both curried and uncurried case *)
 (* TODO: write function that takes in this expr list and checks for duplicated qubits *)
-and elab_app (func : exp) (args : expr list) (env : env_t) : exp =
+(* NOTE: the type of the function being applied might change, but typeof funcname should always
+   return the origional type of the function, so this can always be checked to ensure safety *)
+and elab_app (func : exp) (args : exp list) (env : env_t) : exp =
   match args with
   | [] ->
       failwith "applying function to zero arguments"
-  | [e] ->
+  | [e] -> (
       (*FIXME: deal with type inference here *)
-      let e' = elab_exp e env in
-      let argty = typeof (Left e') env in
+      let argty = typeof (Left e) env in
       let funty = typeof (Left func) env in
       let tvs, arg1ty, outy = decompose_fun_type funty in
       if contains_poly_type arg1ty then
@@ -867,13 +885,18 @@ and elab_app (func : exp) (args : expr list) (env : env_t) : exp =
            | [(tv, ty)] -> type_mismatch_error (TTVar tv) (replace_single_tyvar funty tv ty)
            | _ -> failwith "???" *)
         (* if (List.length reppairs = 1) then failwith "w" else failwith "y)" *)
-        EAp (replace_tyvars funty reppairs, argty, func, e')
+        EAp (replace_tyvars funty reppairs, argty, func, e)
         (*TODO: add subtyping at this next step *)
       else
         (* this is where we ensure that arg1 and argty are the same *)
-        (*TODO: replace this with subtyping *)
-        let arg1ty' = equal_types arg1ty argty in
-        EAp (funty, arg1ty', func, e')
+        (*TODO: make this a function if more cases arise *)
+        match (arg1ty, argty) with
+        | TQAll _, TQref _ ->
+            EAp (funty, argty, func, e)
+        | TQAll _, TQAll _ ->
+            EAp (funty, argty, func, e)
+        | _ ->
+            EAp (funty, equal_types arg1ty argty, func, e) )
   | e :: es ->
       (* we only look at types, so the fact that the exp looks akward is fine for the recursion *)
       let f_to_e = elab_app func [e] env in
@@ -917,8 +940,9 @@ and elab_type (typ : tp) (tyvars : tVar list) (env : env_t) : typ =
       TPauli
   (* TODO: should send to Qref, but what should the key be? *)
   | TpQbit ->
+      TDummy
       (* given polymorphic key *)
-      nyi "(TpQbit)"
+      (* nyi "(TpQbit)" *)
   | TpRng ->
       TRng
   | TpRes ->
