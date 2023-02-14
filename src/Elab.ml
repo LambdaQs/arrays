@@ -51,6 +51,27 @@ let rec equal_types_bool (ty1 : typ) (ty2 : typ) : bool =
   | _ ->
       ty1 = ty2
 
+(* given two LQS types, returns the combined type or returns error if there is a problem *)
+(* favors ty1 *)
+let equal_types (ty1 : typ) (ty2 : typ) : typ =
+  if equal_types_bool ty1 ty2 then ty1 else type_mismatch_error ty1 ty2
+
+(* used when replacing an abstract type with a specific type *)
+(* favors first input *)
+let valid_replacement_type (specty : typ) (absty : typ) : typ =
+  match (specty, absty) with
+  | TQref _, TQAll _ ->
+      specty
+  | TQAll _, TQAll _ ->
+      specty
+  | _ ->
+      equal_types specty absty
+
+(*
+let rec check_fun_type (theor_ty : typ) (act_ty : typ) (args : typ list) : bool =
+    equal_types_bool theor_ty act_ty
+ *)
+
 let rec checkfor_dup_qubits (tys : typ list) : bool =
   let rec check_dups (t, ts) =
     match ts with
@@ -60,11 +81,6 @@ let rec checkfor_dup_qubits (tys : typ list) : bool =
         equal_types_bool t t1 || check_dups (t, ts')
   in
   match tys with [] -> false | t :: ts -> check_dups (t, ts)
-
-(* given two LQS types, returns the combined type or returns error if there is a problem *)
-(* favors ty1 *)
-let rec equal_types (ty1 : typ) (ty2 : typ) : typ =
-  if equal_types_bool ty1 ty2 then ty1 else type_mismatch_error ty1 ty2
 
 (* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
 let rec extract_ifs (stmts : stm list) : stm list * stm list =
@@ -343,14 +359,15 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : exp =
       nyi "Type declarations (NSTy)"
   (* TODO: do something with declaration prefix *)
   | NSClbl (_, calld) :: elmts -> (
-      let f, ty_body, body = elab_calldec calld env in
-      match f with
+      (* here fexp is a lambda function from the inputs to body *)
+      let fvar, fty, fexp = elab_calldec calld env in
+      match fvar with
       | MVar (Ident func_name) ->
-          let vars' = Strmap.add func_name ty_body env.vars in
+          let vars' = Strmap.add func_name fty env.vars in
           (* f is a function here *)
           let env' = {env with vars= vars'} in
           let m = elab_nselmts elmts env' in
-          ELet (ty_body, typeof (Left m) env', body, f, m) )
+          ELet (fty, typeof (Left m) env', fexp, fvar, m) )
 
 (*FIXME: pretty sure m will always typecheck to unit?*)
 (*JZ: we say let f = ..body.. in ..m.., so the type of m may have nothing to do with f *)
@@ -359,23 +376,64 @@ and elab_nselmts (elmts : nSElmnt list) (env : env_t) : exp =
 (*TODO: TODO: check rety against type of body and get NewQubit() example to fail *)
 and elab_calldec (calld : callDec) (env : env_t) : var * typ * exp =
   match calld with
-  | CDFun (UIdent name, TAEmpty, ParTpl params, rettyp, body) ->
-      let rettyp', body' = curry params rettyp body [] env in
-      let rettyp'', body'' = curry_tyvars [] rettyp' body' in
-      (MVar (Ident name), rettyp'', body'')
-  | CDFun (UIdent name, TAList tvars, ParTpl params, rettyp, body) ->
-      let rettyp', body' = curry params rettyp body (elab_tyvars tvars) env in
-      let rettyp'', body'' = curry_tyvars (elab_tyvars tvars) rettyp' body' in
-      (MVar (Ident name), rettyp'', body'')
+  | CDFun (UIdent name, TAEmpty, ParTpl params, rettyp, body) -> (
+      let fty, fexp, args, ty_body = curry params body [] env in
+      match (rettyp, ty_body) with
+      | TpQbit, TQref _ ->
+          failwith "trying to return qref that is only in scope of function"
+      | TpQbit, TQAll _ ->
+          failwith "TODO"
+      | TpQbit, _ ->
+          failwith "function does not return a qubit"
+      | _ ->
+          let _ = equal_types ty_body (elab_type rettyp [] env) in
+          let fty', fexp' = curry_tyvars [] fty fexp in
+          (* add tyvars at this step *)
+          (MVar (Ident name), fty', fexp') )
+  | CDFun (UIdent name, TAList tvars, ParTpl params, rettyp, body) -> (
+      let fty, fexp, args, ty_body =
+        curry params body (elab_tyvars tvars) env
+      in
+      let fty', fexp' = curry_tyvars (elab_tyvars tvars) fty fexp in
+      match (rettyp, ty_body) with
+      | TpQbit, TQref _ ->
+          failwith "trying to return qref that is only in scope of function"
+      | TpQbit, TQAll _ ->
+          failwith "TODO"
+      | TpQbit, _ ->
+          failwith "function does not return a qubit"
+      | _ ->
+          let _ = equal_types ty_body (elab_type rettyp [] env) in
+          (MVar (Ident name), fty', fexp') )
   (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
-  | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) ->
-      let rettyp', body' = curry params rettyp body [] env in
-      let rettyp'', body'' = curry_tyvars [] rettyp' body' in
-      (MVar (Ident name), rettyp'', body'')
-  | CDOp (UIdent name, TAList tvars, ParTpl params, rettyp, _, body) ->
-      let rettyp', body' = curry params rettyp body (elab_tyvars tvars) env in
-      let rettyp'', body'' = curry_tyvars (elab_tyvars tvars) rettyp' body' in
-      (MVar (Ident name), rettyp'', body'')
+  | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) -> (
+      let fty, fexp, args, ty_body = curry params body [] env in
+      let fty', fexp' = curry_tyvars [] fty fexp in
+      match (rettyp, ty_body) with
+      | TpQbit, TQref _ ->
+          failwith "trying to return qref that is only in scope of function"
+      | TpQbit, TQAll _ ->
+          failwith "TODO"
+      | TpQbit, _ ->
+          failwith "function does not return a qubit"
+      | _ ->
+          let _ = equal_types ty_body (elab_type rettyp [] env) in
+          (MVar (Ident name), fty', fexp') )
+  | CDOp (UIdent name, TAList tvars, ParTpl params, rettyp, _, body) -> (
+      let fty, fexp, args, ty_body =
+        curry params body (elab_tyvars tvars) env
+      in
+      let fty', fexp' = curry_tyvars (elab_tyvars tvars) fty fexp in
+      match (rettyp, ty_body) with
+      | TpQbit, TQref _ ->
+          failwith "trying to return qref that is only in scope of function"
+      | TpQbit, TQAll _ ->
+          failwith "TODO"
+      | TpQbit, _ ->
+          failwith "function does not return a qubit"
+      | _ ->
+          let _ = equal_types ty_body (elab_type rettyp [] env) in
+          (MVar (Ident name), fty', fexp') )
 
 (* very simple function that translates the tIdents to tVars, basically just a map *)
 and elab_tyvars (tyvars : tIdent list) : tVar list =
@@ -395,37 +453,47 @@ and curry_tyvars (tyvars : tVar list) (ty : typ) (ex : exp) : typ * exp =
       let ty', ex' = curry_tyvars tvs ty ex in
       (TAll (tv, ty'), ETLam (tv, ex'))
 
+(* FIXME: figure out how the typing works here *)
 (* NOTE: curry returns a type here since it's pretty easy to get the type of the curried
    function, possibly easier than to use typeof? *)
-and curry (params : param list) (rettyp : tp) (body : body) (tyvars : tVar list)
-    (env : env_t) : typ * exp =
+(* also note that we don't check against the theoretical function type at this step *)
+(* TODO: this function could be split up into multiple functions *)
+and curry (params : param list) (body : body) (tyvars : tVar list) (env : env_t)
+    : typ * exp * typ list * typ =
   match params with
   | [] ->
       let typ' = TUnit in
       let ty_body, pbody = elab_body body env in
-      let rettyp' = elab_type rettyp tyvars env in
-      ( TFun (typ', rettyp')
+      (* TODO: should i make the replacement here? or should the function be abstract? probably the latter *)
+      (* TODO: if return type is tqref, fail, if tqall, check against signature *)
+      (* let checked_rettyp = valid_replacement_type ty_body rettyp' in *)
+      ( TFun (typ', ty_body)
       , ELam
           ( typ'
-          , rettyp'
+          , ty_body
           , wild_var (* TODO: might want to make this argument optional *)
-          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
+          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) )
+      , []
+      , ty_body )
   | [ParNI (NItem (UIdent arg, typ))] ->
       (* if typ is TQbit, have to do smth entirely different so this gets a bit annoying *)
       let typ', env' = prep_param arg typ tyvars env in
       let ty_body, pbody = elab_body body env' in
-      let rettyp' = elab_type rettyp tyvars env' in
-      ( TFun (typ', equal_types rettyp' ty_body)
-        (* note that we check ty_body against rettyp' *)
+      ( TFun (typ', ty_body) (* note that we check ty_body against rettyp' *)
       , ELam
           ( typ'
-          , rettyp'
+          , ty_body
           , MVar (Ident arg)
-          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
+          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) )
+      , [typ']
+      , ty_body )
   | ParNI (NItem (UIdent arg, typ)) :: t ->
       let typ', env' = prep_param arg typ tyvars env in
-      let cur_ty, cur = curry t rettyp body tyvars env' in
-      (TFun (typ', cur_ty), ELam (typ', cur_ty, MVar (Ident arg), cur))
+      let ty_cur, cur, input_tys, ty_body = curry t body tyvars env' in
+      ( TFun (typ', ty_cur)
+      , ELam (typ', ty_cur, MVar (Ident arg), cur)
+      , typ' :: input_tys
+      , ty_body )
   | _ ->
       nyi "Nested paramss (ParNIA)"
 
@@ -443,6 +511,7 @@ and prep_param (arg : string) (argtyp : tp) (tyvars : tVar list) (env : env_t) :
       (qtype, env')
       (* Note that we basically do the same thing for lists of qubits as qubits *)
   | TpArr TpQbit ->
+      (* FIXME: is this correct? or should len(l) qalls be created? *)
       let i = cardinal env.qalls in
       let qlisttype = TArr (TQAll (MKVar (Ident (string_of_int i)))) in
       let qalls' = Strmap.add arg i env.qalls in
@@ -874,7 +943,7 @@ and elab_app (func : exp) (args : exp list) (env : env_t) : exp =
   match args with
   | [] ->
       failwith "applying function to zero arguments"
-  | [e] -> (
+  | [e] ->
       (*FIXME: deal with type inference here *)
       let argty = typeof (Left e) env in
       let funty = typeof (Left func) env in
@@ -889,14 +958,7 @@ and elab_app (func : exp) (args : exp list) (env : env_t) : exp =
         (*TODO: add subtyping at this next step *)
       else
         (* this is where we ensure that arg1 and argty are the same *)
-        (*TODO: make this a function if more cases arise *)
-        match (arg1ty, argty) with
-        | TQAll _, TQref _ ->
-            EAp (funty, argty, func, e)
-        | TQAll _, TQAll _ ->
-            EAp (funty, argty, func, e)
-        | _ ->
-            EAp (funty, equal_types arg1ty argty, func, e) )
+        EAp (funty, valid_replacement_type argty arg1ty, func, e)
   | e :: es ->
       (* we only look at types, so the fact that the exp looks akward is fine for the recursion *)
       let f_to_e = elab_app func [e] env in
@@ -940,7 +1002,7 @@ and elab_type (typ : tp) (tyvars : tVar list) (env : env_t) : typ =
       TPauli
   (* TODO: should send to Qref, but what should the key be? *)
   | TpQbit ->
-      TDummy
+      nyi "(TpQbit)"
       (* given polymorphic key *)
       (* nyi "(TpQbit)" *)
   | TpRng ->
