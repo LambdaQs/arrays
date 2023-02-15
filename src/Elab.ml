@@ -46,8 +46,8 @@ let rec equal_types_bool (ty1 : typ) (ty2 : typ) : bool =
       equal_types_bool t1 t2
   | TProd (l1, r1), TProd (l2, r2) ->
       equal_types_bool l1 l2 && equal_types_bool r1 r2
-  | TArr t1, TArr t2 ->
-      equal_types_bool t1 t2
+  | TArr (s1, t1), TArr (s2, t2) ->
+      s1 = s2 && equal_types_bool t1 t2
   | _ ->
       ty1 = ty2
 
@@ -133,7 +133,8 @@ let rec contains_poly_type (ty : typ) : bool =
       contains_poly_type t
   | TProd (t1, t2) ->
       contains_poly_type t1 || contains_poly_type t2
-  | TArr t ->
+  | TArr (s, t) ->
+      (* TODO: is size relevant? *)
       contains_poly_type t
   | _ ->
       false
@@ -162,7 +163,8 @@ let rec get_tyvar_replacements (ty : typ) (argty : typ) : (tVar * typ) list =
       get_tyvar_replacements ty' argty'
   | TProd (t1, t2), TProd (argty1, argty2) ->
       get_tyvar_replacements t1 argty1 @ get_tyvar_replacements t2 argty2
-  | TArr ty', TArr argty' ->
+  | TArr (s, ty'), TArr (args, argty') ->
+      (* TODO: account for sizes here *)
       get_tyvar_replacements ty' argty'
   | _ ->
       if ty = argty then [] else type_mismatch_error ty argty
@@ -207,8 +209,8 @@ let rec replace_single_tyvar (funty : typ) (tv : tVar) (replty : typ) : typ =
   | TProd (ty1, ty2) ->
       TProd
         (replace_single_tyvar ty1 tv replty, replace_single_tyvar ty2 tv replty)
-  | TArr ty1 ->
-      TArr (replace_single_tyvar ty1 tv replty)
+  | TArr (s, ty1) ->
+      TArr (s, replace_single_tyvar ty1 tv replty)
   | _ ->
       funty
 
@@ -269,10 +271,10 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
       ty
   | Left (ENot _) ->
       TBool
-  | Left (EArrNew (ty, _, _)) ->
-      TArr ty
-  | Left (EArrRep (ty, _, _)) ->
-      TArr ty
+  | Left (EArrNew (ty, s, _)) ->
+      TArr (s, ty)
+  | Left (EArrRep (ty, s, _)) ->
+      TArr (s, ty)
   (* this is all already setup in elab_exp below, so just returning ty suffices *)
   | Left (EArrIdx (ty, lis, ind)) ->
       ty
@@ -321,6 +323,8 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
   | Right (CBnd (ty1, ty2, exp, var, cmd)) ->
       ty2
   | Right (CNew (ty, var, cmd)) ->
+      ty
+  | Right (CNewArr (ty, var, cmd)) ->
       ty
   | Right (CGap _) ->
       TUnit
@@ -512,8 +516,10 @@ and prep_param (arg : string) (argtyp : tp) (tyvars : tVar list) (env : env_t) :
       (* Note that we basically do the same thing for lists of qubits as qubits *)
   | TpArr TpQbit ->
       (* FIXME: is this correct? or should len(l) qalls be created? *)
+      (* Kartik: TODO: yes, use len(l) here to increment qalls *)
       let i = cardinal env.qalls in
-      let qlisttype = TArr (TQAll (MKVar (Ident (string_of_int i)))) in
+      let len = BNat 1 (* FIXME: *) in
+      let qlisttype = TArr (len, TQAll (MKVar (Ident (string_of_int i)))) in
       let qalls' = Strmap.add arg i env.qalls in
       let vars' = Strmap.add arg qlisttype env.vars in
       let env' = {env with qalls= qalls'; vars= vars'} in
@@ -531,25 +537,30 @@ and prep_qubit_bind (qvar : string) (q : qbitInit) (env : env_t) :
   match q with
   | QInitS ->
       let i = cardinal env.qrefs in
-      let qtype = TQref (MKey (Ident (string_of_int i))) in
+      let qtype = TQref (MKey (BNat i)) in
       (*this seems pretty redundant, but is perhaps helpful *)
       let qrefs' = Strmap.add qvar i env.qrefs in
       let vars' = Strmap.add qvar qtype env.vars in
       let env' = {env with qrefs= qrefs'; vars= vars'} in
-      (qtype, EQloc (MKey (Ident (string_of_int i))), env')
+      (qtype, EQloc (MKey (BNat i)), env')
   (* FIXME: should not be qalls, since we are creating len specific qubits *)
   (* FIXME: !!!!!!! figure out this case, since it is the whole point of qsharp-arrays *)
   | QInitA len ->
       let len' = elab_exp len env in
       let _ = equal_types (typeof (Left len') env) TInt in
       let i = cardinal env.qalls in
-      let qltype = TArr (TQAll (MKVar (Ident (string_of_int i)))) in
+      let qltype =
+        TArr (BNat 1 (* FIXME: *), TQAll (MKVar (Ident (string_of_int i))))
+      in
       (*this seems pretty redundant, but is perhaps helpful *)
       let qalls' = Strmap.add qvar i env.qalls in
       let vars' = Strmap.add qvar qltype env.vars in
       let env' = {env with qalls= qalls'; vars= vars'} in
       (*TODO: what goes in the list here? *)
-      (qltype, EArrNew (TQAll (MKVar (Ident (string_of_int i))), len', []), env')
+      ( qltype
+      , EArrNew
+          (TQAll (MKVar (Ident (string_of_int i))), BNat 1 (* FIXME: *), [])
+      , env' )
   | QInitT qs ->
       failwith "TODO"
 
@@ -814,17 +825,17 @@ and elab_exp (exp : expr) (env : env_t) : exp =
     match es with
     | [] ->
         (* FIXME: how to do type inference here? *)
-        EArrNew (TUnit, EInt 0, [])
+        EArrNew (TUnit, BNat 0, [])
     | e :: es' ->
         let ty = typeof (Left (elab_exp e env)) env in
         EArrNew
-          (ty, EInt (List.length es), List.map (fun e -> elab_exp e env) es) )
+          (ty, BNat (List.length es), List.map (fun e -> elab_exp e env) es) )
   | QsESArr (elem, _, num) -> (
       let elem' = elab_exp elem env in
       let num' = elab_exp num env in
       match typeof (Left num') env with
       | TInt ->
-          EArrRep (typeof (Left elem') env, num', elem')
+          EArrRep (typeof (Left elem') env, BNat 1 (* FIXME: *), elem')
       | _ ->
           failwith "must repeat elem with int" )
   | QsEItem _ ->
@@ -835,15 +846,15 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       let lis' = elab_exp lis env in
       let ind' = elab_exp ind env in
       match typeof (Left lis') env with
-      | TArr ty -> (
+      | TArr (s, ty) -> (
         (*TODO: is this correct? We can index into a list with a range, so should be something like this *)
         match ind' with
         | ERng _ ->
-            EArrIdx (TArr ty, lis', ind')
+            EArrIdx (TArr (s, ty), lis', ind')
         | ERngR _ ->
-            EArrIdx (TArr ty, lis', ind')
+            EArrIdx (TArr (s, ty), lis', ind')
         | ERngL _ ->
-            EArrIdx (TArr ty, lis', ind')
+            EArrIdx (TArr (s, ty), lis', ind')
         | EInt _ ->
             EArrIdx (ty, lis', ind')
         | _ ->
@@ -869,7 +880,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
     | [arr] -> (
         let arr' = elab_exp arr env in
         match typeof (Left arr') env with
-        | TArr ty ->
+        | TArr (s, ty) ->
             EArrLen arr'
         | _ ->
             failwith "expected array type" )
@@ -989,7 +1000,7 @@ and elab_type (typ : tp) (tyvars : tVar list) (env : env_t) : typ =
       TFun (elab_type ty1 tyvars env, elab_type ty2 tyvars env)
       (*TODO: what to do with chars here? *)
   | TpArr typ ->
-      TArr (elab_type typ tyvars env)
+      TArr (BNat 1 (* FIXME: *), elab_type typ tyvars env)
   | TpBInt ->
       nyi "(TBInt)"
   | TpBool ->

@@ -1,29 +1,37 @@
 entrypoints Exp;
 
+-- Kinds (TODO: if needed)
+-- Base. KBase ::= B; -- base kind
+-- Star. KStar ::= *; -- star kind
+
+-- Base types
+BNat. Nat ::= Integer;
+
 -- Metavariables
-MVar.  Var  ::= Ident; -- variables
-MTVar. TVar ::= Ident; -- type variables
-MUni.  Uni  ::= Ident; -- unitaries
-MKey.  Key  ::= Ident; -- qubit symbols/unique keys
-MKVar. KVar ::= Ident; -- key variables
+MVar.  Var  ::= Ident;    -- variables
+MTVar. TVar ::= Ident;    -- type variables
+MUni.  Uni  ::= Ident;    -- unitaries
+MKey.  Key  ::= Nat;  -- qubit symbols/unique keys
+MKVar. KVar ::= Ident;    -- key variables
 
 -- Types
-TTVar.  Typ ::= TVar;                        -- type variable
-TQref.  Typ ::= "tqref" "<" Key ">";          -- qubit reference
-TQAll.  Typ ::= "tqall" "<" KVar ">";         -- abstract qubit ref
-TFun.   Typ ::= "tfun"  "(" Typ  ";" Typ ")"; -- function
-TAll.   Typ ::= "tall"  "(" TVar "." Typ ")"; -- polymorphic function
-TCmd.   Typ ::= "tcmd"  "(" Typ ")";          -- command
-TProd.  Typ ::= "tprod" "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
-TArr.   Typ ::= "tarr"  "(" Typ ")";          -- array
-TRng.   Typ ::= "trange";
-TPauli. Typ ::= "tpauli";                     -- TODO: consider changing this to sum type
-TUnit.  Typ ::= "tunit";
-TBool.  Typ ::= "tbool";
-TStr.   Typ ::= "tstr";
-TInt.   Typ ::= "tint";
-TDbl.   Typ ::= "tdouble";
-TDummy. Typ ::= "tdummy";
+TTVar.   Typ ::= TVar;                           -- type variable
+TQref.   Typ ::= "tqref"   "<" Key ">";          -- qubit reference
+TQAll.   Typ ::= "tqall"   "<" KVar ">";         -- abstract qubit ref
+TFun.    Typ ::= "tfun"    "(" Typ  ";" Typ ")"; -- function
+TAll.    Typ ::= "tall"    "(" TVar "." Typ ")"; -- polymorphic function
+TCmd.    Typ ::= "tcmd"    "(" Typ ")";          -- command
+TProd.   Typ ::= "tprod"   "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
+TArr.    Typ ::= "tarr"    "(" Nat ";" Typ ")";  -- concrete array
+TAbsArr. Typ ::= "tabsarr" "(" Typ ")";          -- abstract array of arbitrary length
+TRng.    Typ ::= "trange";
+TPauli.  Typ ::= "tpauli";                       -- TODO: consider changing this to sum type
+TUnit.   Typ ::= "tunit";
+TBool.   Typ ::= "tbool";
+TStr.    Typ ::= "tstr";
+TInt.    Typ ::= "tint";
+TDbl.    Typ ::= "tdouble";
+TDummy.  Typ ::= "tdummy";
 
 -- Expressions
 EVar.     Exp ::= Var;
@@ -42,11 +50,10 @@ ETrue.    Exp ::= "true";
 EFls.     Exp ::= "false";
 EIte.     Exp ::= "if" "[" Typ "]" "(" Exp ";" Exp ";" Exp ")";
 ENot.     Exp ::= "not" Exp;
--- FIXME: should exp be int in EArrNew? Only ints end up occuring in Elab
-EArrNew.  Exp ::= "anew" "[" Typ "]" "(" Exp ";" [Exp] ")";                -- new array,   e.g. let a be anew[int](3; [1,2,3])
-EArrRep.  Exp ::= "arepeat" "[" Typ "]" "(" Exp ";" Exp ")";               -- array of repeated elem, first number is size to be consisten with EArrC
-EArrIdx.  Exp ::= "aidx" "[" Typ "]" "(" Exp ";" Exp ")";                  -- array index, e.g. aidx[int](a; 1) gets the 2nd elem in a
-EArrLen.  Exp ::= "alen" "(" Exp ")";                                      -- array length e.g. alen(a)
+EArrNew.  Exp ::= "anew"    "[" Typ "]" "(" Nat ";" [Exp] ")";  -- new array,   e.g. let a be anew[int](3; [1,2,3])
+EArrRep.  Exp ::= "arepeat" "[" Typ "]" "(" Nat ";" Exp ")";    -- array of repeated elem, Nat is size
+EArrIdx.  Exp ::= "aidx"    "[" Typ "]" "(" Exp ";" Exp ")";    -- array index, e.g. aidx[int](a; 1) gets the 2nd elem in a
+EArrLen.  Exp ::= "alen"    "(" Exp ")";                        -- array length e.g. alen(a)
 EPow.     Exp ::= "pow"     "(" Exp ";" Exp ")";
 EMul.     Exp ::= "mul"     "(" Exp ";" Exp ")";
 EDiv.     Exp ::= "div"     "(" Exp ";" Exp ")";
@@ -74,7 +81,8 @@ separator Exp ",";
 CRet.   Cmd ::= "ret" "[" Typ "]" Exp;                                  -- return
 CBnd.   Cmd ::= "bnd" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Cmd ")"; -- sequence
 
-CNew.   Cmd ::= "new" "[" Typ "]" "(" Var "." Cmd ")";                  -- new qubit reference
-CGap.   Cmd ::= Uni "(" Exp ")";                                        -- unitary gate application
-CDiag.  Cmd ::= "D" "(" Uni "," Uni ";" Exp "," Exp ")";                -- diagonal gate application
-CMeas.  Cmd ::= "meas" "(" Exp ")";                                     -- measurement
+CNew.    Cmd ::= "new"    "[" Typ "]" "(" Var "." Cmd ")";               -- new qubit reference
+CNewArr. Cmd ::= "arrnew" "[" Typ "]" "(" Var "." Cmd ")";               -- new qubit array
+CGap.    Cmd ::= Uni "(" Exp ")";                                        -- unitary gate application
+CDiag.   Cmd ::= "D" "(" Uni "," Uni ";" Exp "," Exp ")";                -- diagonal gate application
+CMeas.   Cmd ::= "meas" "(" Exp ")";                                     -- measurement
