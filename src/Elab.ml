@@ -27,6 +27,10 @@ open Strmap
 
 type env_t = {qrefs: int Strmap.t; qalls: int Strmap.t; vars: typ Strmap.t}
 
+(**************************)
+(* General typing helpers *)
+(**************************)
+
 (* checks if two types are equal *)
 let rec equal_types_bool (ty1 : typ) (ty2 : typ) : bool =
   (* when would this case actually come up? *)
@@ -56,6 +60,146 @@ let rec equal_types_bool (ty1 : typ) (ty2 : typ) : bool =
 let equal_types (ty1 : typ) (ty2 : typ) : typ =
   if equal_types_bool ty1 ty2 then ty1 else type_mismatch_error ty1 ty2
 
+(* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
+let rec extract_ifs (stmts : stm list) : stm list * stm list =
+  match stmts with
+  | SEIf (e, s) :: stmts' ->
+      let ifs, stmts'' = extract_ifs stmts' in
+      (SEIf (e, s) :: ifs, stmts'')
+  | SElse scope :: stmts' ->
+      ([SElse scope], stmts')
+  | _ ->
+      ([], stmts)
+
+(*******************************)
+(* Function definition helpers *)
+(*******************************)
+
+(* this checks non qubit types in function signatures, giving a primitive translation fro qs types to lqs types *)
+(* no env required, but need tyvars for TpPar check *)
+let rec elab_type (typ : tp) (tyvars : tVar list) : typ =
+  match typ with
+  | TpEmp ->
+      nyi "(TEmp)"
+  | TpPar (TIdent tvstr) ->
+      if List.mem (MTVar (Ident tvstr)) tyvars then TTVar (MTVar (Ident tvstr))
+      else failwith ("Undefined type variable: " ^ tvstr)
+  | TpUDT _ ->
+      nyi "(TQNm)"
+  | TpTpl typs -> (
+    match typs with
+    (*FIXME: this first case comes up some times, incorrectly I think, but just translating t seems to work well enough *)
+    | [t] ->
+        elab_type t tyvars
+    | [t1; t2] ->
+        TProd (elab_type t1 tyvars, elab_type t2 tyvars)
+    | _ ->
+        failwith "only 2-ples are accepted" )
+  | TpFun (ty1, ty2) ->
+      TFun (elab_type ty1 tyvars, elab_type ty2 tyvars)
+  (* TODO: is TOp the same type as TFun? *)
+  | TpOp (ty1, ty2, chars) ->
+      TFun (elab_type ty1 tyvars, elab_type ty2 tyvars)
+      (*TODO: what to do with chars here? *)
+  | TpArr typ ->
+      TAbsArr (elab_type typ tyvars)
+  | TpBInt ->
+      nyi "(TBInt)"
+  | TpBool ->
+      TBool
+  | TpDbl ->
+      nyi "(TDbl)"
+  | TpInt ->
+      TInt
+  | TpPli ->
+      TPauli
+  (* TODO: should send to Qref, but what should the key be? *)
+  | TpQbit ->
+      failwith "This case should never be hit"
+  | TpRng ->
+      TRng
+  | TpRes ->
+      nyi "(TpRes)"
+  | TpStr ->
+      TStr
+  | TpUnit ->
+      TUnit
+
+let rec check_for_qubit_in_input (kv : kVar) (args : (string * typ) list) : bool
+    =
+  match args with
+  | [] ->
+      false
+  | (s, ty) :: args' -> (
+    match ty with
+    | TQAll kv' ->
+        kv = kv' || check_for_qubit_in_input kv args'
+        (* just split up the product, not the nicest code though*)
+    | TProd (t1, t2) ->
+        check_for_qubit_in_input kv (("t1", t1) :: ("t2", t2) :: args')
+        (*FIXME: make more clear and also do we just let qubits have the same kvar as their list? *)
+    | TArr (l, ty) ->
+        check_for_qubit_in_input kv (("list", ty) :: args')
+    | TAbsArr ty ->
+        failwith "TODO"
+    | _ ->
+        check_for_qubit_in_input kv args' )
+
+(* checks the the actual return type is valid *)
+let check_retty (theor_ty : tp) (act_ty : typ) (args : (string * typ) list)
+    (tyvars : tVar list) : typ =
+  match (theor_ty, act_ty) with
+  | TpQbit, TQref _ ->
+      failwith "trying to return qref that is only in scope of function"
+  | TpQbit, TQAll kv ->
+      if check_for_qubit_in_input kv args then act_ty
+      else failwith "returned TQAll that is not in correct scope"
+  | TpArr TpQbit, TArr _ ->
+      failwith "TODO 1"
+  | TpArr TpQbit, TAbsArr _ ->
+      failwith "TODO 2"
+  | TpQbit, _ ->
+      failwith "function does not return a qubit"
+  | _ ->
+      equal_types (elab_type theor_ty tyvars) act_ty
+
+(* this just adds the tyvars to the output of curry_types *)
+let rec curry_tyvars (tyvars : tVar list) (ty : typ) (ex : exp) : typ * exp =
+  match tyvars with
+  | [] ->
+      (ty, ex)
+  | tv :: tvs ->
+      let ty', ex' = curry_tyvars tvs ty ex in
+      (TAll (tv, ty'), ETLam (tv, ex'))
+
+(* this function just puts everything together *)
+(* note that we don't do any checks at this step *)
+(*TODO: don't need to have this in large recursive and call, might want to reorganize *)
+let rec curry_types (args : (string * typ) list) (pbody : lqsterm)
+    (ty_body : typ) : typ * exp =
+  match args with
+  | [] ->
+      ( TFun (TUnit, ty_body)
+      , ELam
+          ( TUnit
+          , ty_body
+          , wild_var (* TODO: might want to make this argument optional *)
+          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
+  | [(arg1name, arg1ty)] ->
+      ( TFun (arg1ty, ty_body) (* note that we check ty_body against rettyp' *)
+      , ELam
+          ( arg1ty
+          , ty_body
+          , MVar (Ident arg1name)
+          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
+  | (arg1name, arg1ty) :: t ->
+      let ty_cur, cur = curry_types t pbody ty_body in
+      (TFun (arg1ty, ty_cur), ELam (arg1ty, ty_cur, MVar (Ident arg1name), cur))
+
+(********************************)
+(* Function application helpers *)
+(********************************)
+
 (* used when replacing an abstract type with a specific type *)
 (* favors first input *)
 let valid_replacement_type (specty : typ) (absty : typ) : typ =
@@ -67,19 +211,6 @@ let valid_replacement_type (specty : typ) (absty : typ) : typ =
   | _ ->
       equal_types specty absty
 
-let rec check_retty (theor_ty : tp) (act_ty : typ) (args : (string * typ) list)
-    (tyvars : tVar list) : typ =
-  equal_types TDummy act_ty
-
-(*
-    | TpQbit, TQref _ ->
-        failwith "trying to return qref that is only in scope of function"
-    | TpQbit, TQAll _ ->
-        failwith "TODO"
-    | TpQbit, _ ->
-        failwith "function does not return a qubit"
-    | _ -> *)
-
 let rec checkfor_dup_qubits (tys : typ list) : bool =
   let rec check_dups (t, ts) =
     match ts with
@@ -89,17 +220,6 @@ let rec checkfor_dup_qubits (tys : typ list) : bool =
         equal_types_bool t t1 || check_dups (t, ts')
   in
   match tys with [] -> false | t :: ts -> check_dups (t, ts)
-
-(* looks for elif* + else? + ... and returns a list of the elifs/elses, and a list of the other stuff *)
-let rec extract_ifs (stmts : stm list) : stm list * stm list =
-  match stmts with
-  | SEIf (e, s) :: stmts' ->
-      let ifs, stmts'' = extract_ifs stmts' in
-      (SEIf (e, s) :: ifs, stmts'')
-  | SElse scope :: stmts' ->
-      ([SElse scope], stmts')
-  | _ ->
-      ([], stmts)
 
 (* takes T' -> (U' -> ... -> (t1 -> (t2 ... -> (tn -> tout)...) to ( [T',U'...], [t1,...,tout] ) *)
 let rec pullout_tyvars (ty : typ) : tVar list * typ =
@@ -229,6 +349,10 @@ let rec replace_tyvars (funty : typ) (tvreps : (tVar * typ) list) : typ =
   | (tv, replty) :: tvreps' ->
       replace_tyvars (replace_single_tyvar funty tv replty) tvreps'
 
+(*****)
+(* This is the main type checker*)
+(*****)
+
 (* note that as long as TDummy never occurs as an output of typeof, we know it will never occur in the final tree *)
 let rec typeof (term : lqsterm) (env : env_t) : typ =
   match term with
@@ -283,8 +407,8 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
       TArr (s, ty)
   | Left (EArrRep (ty, s, _)) ->
       TArr (s, ty)
-  (* this is all already setup in elab_exp below, so just returning ty suffices *)
   | Left (EArrIdx (ty, lis, ind)) ->
+      (* FIXME: now that we keep track of lengths, this is now wrong. I think length must also be abstract *)
       ty
   | Left (EArrLen _) ->
       TInt
@@ -340,6 +464,10 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
       TUnit
   | Right (CMeas _) ->
       TInt
+
+(*****)
+(* begining of elaboration loop *)
+(*****)
 
 (* elab takes in the the program and the environment composed of the
    signature and context *)
@@ -431,15 +559,6 @@ and elab_tyvars (tyvars : tIdent list) : tVar list =
       let (TIdent tvstr) = tv in
       MTVar (Ident tvstr) :: elab_tyvars tvs
 
-(* this just adds the tyvars to the output of curry_types *)
-and curry_tyvars (tyvars : tVar list) (ty : typ) (ex : exp) : typ * exp =
-  match tyvars with
-  | [] ->
-      (ty, ex)
-  | tv :: tvs ->
-      let ty', ex' = curry_tyvars tvs ty ex in
-      (TAll (tv, ty'), ETLam (tv, ex'))
-
 (* processes functions arguments to be curried together in curry_types *)
 and elab_args (params : param list) (tyvars : tVar list) (env : env_t) :
     (string * typ) list * env_t =
@@ -473,30 +592,6 @@ and elab_args (params : param list) (tyvars : tVar list) (env : env_t) :
           ((arg, argtyp') :: args, env'') )
   | _ ->
       nyi "Nested paramss (ParNIA)"
-
-(* this function just puts everything together *)
-(* note that we don't do any checks at this step *)
-(*TODO: don't need to have this in large recursive and call, might want to reorganize *)
-and curry_types (args : (string * typ) list) (pbody : lqsterm) (ty_body : typ) :
-    typ * exp =
-  match args with
-  | [] ->
-      ( TFun (TUnit, ty_body)
-      , ELam
-          ( TUnit
-          , ty_body
-          , wild_var (* TODO: might want to make this argument optional *)
-          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
-  | [(arg1name, arg1ty)] ->
-      ( TFun (arg1ty, ty_body) (* note that we check ty_body against rettyp' *)
-      , ELam
-          ( arg1ty
-          , ty_body
-          , MVar (Ident arg1name)
-          , match pbody with Left e -> e | Right c -> ECmd (ty_body, c) ) )
-  | (arg1name, arg1ty) :: t ->
-      let ty_cur, cur = curry_types t pbody ty_body in
-      (TFun (arg1ty, ty_cur), ELam (arg1ty, ty_cur, MVar (Ident arg1name), cur))
 
 (* nice helper, that is specialized for let bindings with qubits *)
 (* the returned exp is the binding expression *)
@@ -827,6 +922,19 @@ and elab_exp (exp : expr) (env : env_t) : exp =
         | EInt _ ->
             EArrIdx (ty, lis', ind')
         | _ ->
+            failwith "incorrect type for indexing into a list"
+            (*TODO: bad repeated code from TArr and AAbsArr *) )
+      | TAbsArr ty -> (
+        match ind' with
+        | ERng _ ->
+            EArrIdx (TAbsArr ty, lis', ind')
+        | ERngR _ ->
+            EArrIdx (TAbsArr ty, lis', ind')
+        | ERngL _ ->
+            EArrIdx (TAbsArr ty, lis', ind')
+        | EInt _ ->
+            EArrIdx (ty, lis', ind')
+        | _ ->
             failwith "incorrect type for indexing into a list" )
       | _ ->
           failwith "expected list type" )
@@ -850,6 +958,8 @@ and elab_exp (exp : expr) (env : env_t) : exp =
         let arr' = elab_exp arr env in
         match typeof (Left arr') env with
         | TArr (s, ty) ->
+            EArrLen arr'
+        | TAbsArr ty ->
             EArrLen arr'
         | _ ->
             failwith "expected array type" )
@@ -943,56 +1053,6 @@ and elab_app (func : exp) (args : exp list) (env : env_t) : exp =
       (* we only look at types, so the fact that the exp looks akward is fine for the recursion *)
       let f_to_e = elab_app func [e] env in
       elab_app f_to_e es env
-
-and elab_type (typ : tp) (tyvars : tVar list) : typ =
-  match typ with
-  | TpEmp ->
-      nyi "(TEmp)"
-  | TpPar (TIdent tvstr) ->
-      if List.mem (MTVar (Ident tvstr)) tyvars then TTVar (MTVar (Ident tvstr))
-      else failwith ("Undefined type variable: " ^ tvstr)
-  | TpUDT _ ->
-      nyi "(TQNm)"
-  | TpTpl typs -> (
-    match typs with
-    (*FIXME: this first case comes up some times, incorrectly I think, but just translating t seems to work well enough *)
-    | [t] ->
-        elab_type t tyvars
-    | [t1; t2] ->
-        TProd (elab_type t1 tyvars, elab_type t2 tyvars)
-    | _ ->
-        failwith "only 2-ples are accepted" )
-  | TpFun (ty1, ty2) ->
-      TFun (elab_type ty1 tyvars, elab_type ty2 tyvars)
-  (* TODO: is TOp the same type as TFun? *)
-  | TpOp (ty1, ty2, chars) ->
-      TFun (elab_type ty1 tyvars, elab_type ty2 tyvars)
-      (*TODO: what to do with chars here? *)
-  | TpArr typ ->
-      TArr (BNat 1 (* FIXME: *), elab_type typ tyvars)
-  | TpBInt ->
-      nyi "(TBInt)"
-  | TpBool ->
-      TBool
-  | TpDbl ->
-      nyi "(TDbl)"
-  | TpInt ->
-      TInt
-  | TpPli ->
-      TPauli
-  (* TODO: should send to Qref, but what should the key be? *)
-  | TpQbit ->
-      nyi "(TpQbit)"
-      (* given polymorphic key *)
-      (* nyi "(TpQbit)" *)
-  | TpRng ->
-      TRng
-  | TpRes ->
-      nyi "(TpRes)"
-  | TpStr ->
-      TStr
-  | TpUnit ->
-      TUnit
 
 let parse (c : in_channel) : doc =
   ParQSharp.pDoc LexQSharp.token (Lexing.from_channel c)
