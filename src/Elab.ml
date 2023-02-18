@@ -141,7 +141,7 @@ let rec check_for_qubit_in_input (kv : kVar) (args : (string * typ) list) : bool
     | TArr (l, ty) ->
         check_for_qubit_in_input kv (("list", ty) :: args')
     | TAbsArr ty ->
-        failwith "TODO"
+        check_for_qubit_in_input kv (("list", ty) :: args')
     | _ ->
         check_for_qubit_in_input kv args' )
 
@@ -625,7 +625,7 @@ and elab_qubit_bind (qvar : string) (q : qbitInit) (env : env_t) :
           (TQAll (MKVar (Ident (string_of_int i))), BNat 1 (* FIXME: *), [])
       , env' )
   | QInitT qs ->
-      failwith "TODO"
+      failwith "TODO1"
 
 and elab_body (body : body) (env : env_t) : typ * lqsterm =
   match body with
