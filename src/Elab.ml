@@ -2,6 +2,7 @@ open AbsLambdaQs
 open AbsQSharp
 open Printf
 open Map
+open String
 open List
 open Either
 
@@ -70,6 +71,20 @@ let rec extract_ifs (stmts : stm list) : stm list * stm list =
       ([SElse scope], stmts')
   | _ ->
       ([], stmts)
+
+let rec gen_qubits (var : string) (len : int) (env : env_t) : typ * env_t =
+  if len < 0 then failwith "out of bounds qubit creation value"
+  else if len = 0 then (TDummy, env)
+  else
+    let i = cardinal env.qrefs in
+    let qtype = TQAll (MKVar (Ident (string_of_int i))) in
+    let qname = var ^ string_of_int (i - 1) in
+    let qrefs' = Strmap.add qname i env.qrefs in
+    let vars' = Strmap.add qname qtype env.vars in
+    let env' = {env with qalls= qrefs'; vars= vars'} in
+    (* let q_exp = EVar (MVar (Ident qname)) in  *)
+    let qs, env'' = gen_qubits var (len - 1) env' in
+    (qtype, env'')
 
 (*******************************)
 (* Function definition helpers *)
@@ -155,9 +170,9 @@ let check_retty (theor_ty : tp) (act_ty : typ) (args : (string * typ) list)
       if check_for_qubit_in_input kv args then act_ty
       else failwith "returned TQAll that is not in correct scope"
   | TpArr TpQbit, TArr _ ->
-      failwith "TODO 1"
+      failwith "TODO: checking for TArr Qubit return type"
   | TpArr TpQbit, TAbsArr _ ->
-      failwith "TODO 2"
+      failwith "TODO: checking for TAbsArr Qubit return type"
   | TpQbit, _ ->
       failwith "function does not return a qubit"
   | _ ->
@@ -456,7 +471,7 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
       ty2
   | Right (CNew (ty, var, cmd)) ->
       ty
-  | Right (CNewArr (ty, var, cmd)) ->
+  | Right (CNewArr (ty, _, var, cmd)) ->
       ty
   | Right (CGap _) ->
       TUnit
@@ -585,6 +600,7 @@ and elab_args (params : param list) (tyvars : tVar list) (env : env_t) :
           let vars' = Strmap.add arg qlisttype env'.vars in
           let env'' = {env with qalls= qalls'; vars= vars'} in
           ((arg, qlisttype) :: args, env'')
+          (* TODO: add case for tuple *)
       | _ ->
           let argtyp' = elab_type argtyp tyvars in
           let vars' = Strmap.add arg argtyp' env'.vars in
@@ -595,8 +611,8 @@ and elab_args (params : param list) (tyvars : tVar list) (env : env_t) :
 
 (* nice helper, that is specialized for let bindings with qubits *)
 (* the returned exp is the binding expression *)
-and elab_qubit_bind (qvar : string) (q : qbitInit) (env : env_t) :
-    typ * exp * env_t =
+and elab_qubit_bind (qvar : string) (q : qbitInit) (stmts : stm list)
+    (env : env_t) : cmd * env_t =
   match q with
   | QInitS ->
       let i = cardinal env.qrefs in
@@ -605,27 +621,34 @@ and elab_qubit_bind (qvar : string) (q : qbitInit) (env : env_t) :
       let qrefs' = Strmap.add qvar i env.qrefs in
       let vars' = Strmap.add qvar qtype env.vars in
       let env' = {env with qrefs= qrefs'; vars= vars'} in
-      (qtype, EQloc (MKey (BNat i)), env')
-  (* FIXME: should not be qalls, since we are creating len specific qubits *)
-  (* FIXME: !!!!!!! figure out this case, since it is the whole point of qsharp-arrays *)
+      let s = elab_stmts stmts env' in
+      let s_ty = typeof s env' in
+      let s_cmd =
+        match s with Left e_s -> CRet (s_ty, e_s) | Right m_s -> m_s
+      in
+      (CNew (s_ty, MVar (Ident qvar), s_cmd), env')
+      (* TODO: figure out what to do with abstract lengths here *)
   | QInitA len ->
+      (* FIXME: does not really make sence that qlist will have type qall but contain qrefs *)
       let len' = elab_exp len env in
       let _ = equal_types (typeof (Left len') env) TInt in
-      let i = cardinal env.qalls in
-      let qltype =
-        TArr (BNat 1 (* FIXME: *), TQAll (MKVar (Ident (string_of_int i))))
+      let len'' =
+        match len' with EInt e -> e | _ -> failwith "TODO: abstract length"
       in
-      (*this seems pretty redundant, but is perhaps helpful *)
-      let qalls' = Strmap.add qvar i env.qalls in
-      let vars' = Strmap.add qvar qltype env.vars in
-      let env' = {env with qalls= qalls'; vars= vars'} in
-      (*TODO: what goes in the list here? *)
-      ( qltype
-      , EArrNew
-          (TQAll (MKVar (Ident (string_of_int i))), BNat 1 (* FIXME: *), [])
-      , env' )
+      if len'' < 1 then failwith "cannot have 0 length qubit list"
+      else
+        let qtype, env' = gen_qubits qvar len'' env in
+        let qltype = TArr (BNat len'', qtype) in
+        let vars' = Strmap.add qvar qltype env.vars in
+        let env'' = {env' with vars= vars'} in
+        let s = elab_stmts stmts env'' in
+        let s_ty = typeof s env'' in
+        let s_cmd =
+          match s with Left e_s -> CRet (s_ty, e_s) | Right m_s -> m_s
+        in
+        (CNewArr (s_ty, BNat len'', MVar (Ident qvar), s_cmd), env')
   | QInitT qs ->
-      failwith "TODO1"
+      failwith "TODO (QInitT)"
 
 and elab_body (body : body) (env : env_t) : typ * lqsterm =
   match body with
@@ -742,14 +765,8 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
     | BndWild ->
         failwith "Must bind Qubit to a variable, otherwise they are wasted"
     | BndName (UIdent var) ->
-        (* TODO: TODO: add one in env for each entry in array (in list case) *)
-        let qtype, qexp, env' = elab_qubit_bind var qbitInit env in
-        let s = elab_stmts stms' env' in
-        let s_ty = typeof s env' in
-        let s_cmd =
-          match s with Left e_s -> CRet (s_ty, e_s) | Right m_s -> m_s
-        in
-        Right (CNew (s_ty, MVar (Ident var), s_cmd))
+        let m, _ = elab_qubit_bind var qbitInit stms' env in
+        Right m
     | BndTplA bnds ->
         failwith "mismatch in number of binds" )
   | SUseS (qbitBnd, scope) :: stms' ->
@@ -889,7 +906,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
     match es with
     | [] ->
         (* FIXME: how to do type inference here? *)
-        EArrNew (TUnit, BNat 0, [])
+        EArrNew (TDummy, BNat 0, [])
     | e :: es' ->
         let ty = typeof (Left (elab_exp e env)) env in
         EArrNew
