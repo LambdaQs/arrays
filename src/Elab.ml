@@ -53,6 +53,8 @@ let rec equal_types_bool (ty1 : typ) (ty2 : typ) : bool =
       equal_types_bool l1 l2 && equal_types_bool r1 r2
   | TArr (s1, t1), TArr (s2, t2) ->
       s1 = s2 && equal_types_bool t1 t2
+  | TAbsArr t1, TAbsArr t2 ->
+      equal_types_bool t1 t2
   | _ ->
       ty1 = ty2
 
@@ -277,7 +279,8 @@ let rec contains_poly_type (ty : typ) : bool =
   | TProd (t1, t2) ->
       contains_poly_type t1 || contains_poly_type t2
   | TArr (s, t) ->
-      (* TODO: is size relevant? *)
+      failwith "list arg of function param cannot have definite length"
+  | TAbsArr t ->
       contains_poly_type t
   | _ ->
       false
@@ -306,10 +309,14 @@ let rec get_tyvar_replacements (ty : typ) (argty : typ) : (tVar * typ) list =
       get_tyvar_replacements ty' argty'
   | TProd (t1, t2), TProd (argty1, argty2) ->
       get_tyvar_replacements t1 argty1 @ get_tyvar_replacements t2 argty2
-  | TArr (s, ty'), TArr (args, argty') ->
-      (* TODO: account for sizes here *)
+  | TArr (s1, ty'), _ ->
+      failwith "list arg of function param cannot have definite length"
+  | TAbsArr ty', TArr (s2, argty') ->
+      get_tyvar_replacements ty' argty'
+  | TAbsArr ty', TAbsArr argty' ->
       get_tyvar_replacements ty' argty'
   | _ ->
+      (* can hit this case because of the recursion *)
       if ty = argty then [] else type_mismatch_error ty argty
 
 (* checks that we don't overload type variables *)
@@ -353,7 +360,9 @@ let rec replace_single_tyvar (funty : typ) (tv : tVar) (replty : typ) : typ =
       TProd
         (replace_single_tyvar ty1 tv replty, replace_single_tyvar ty2 tv replty)
   | TArr (s, ty1) ->
-      TArr (s, replace_single_tyvar ty1 tv replty)
+      failwith "list arg of function param cannot have definite length"
+  | TAbsArr ty1 ->
+      TAbsArr (replace_single_tyvar ty1 tv replty)
   | _ ->
       funty
 
