@@ -82,7 +82,7 @@ CRet.   Cmd ::= "ret" "[" Typ "]" Exp;                                  -- retur
 CBnd.   Cmd ::= "bnd" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Cmd ")"; -- sequence
 
 CNew.    Cmd ::= "new"    "[" Typ "]" "(" Var "." Cmd ")";               -- new qubit reference
-CNewArr. Cmd ::= "arrnew" "[" Typ "]" "(" Var "." Cmd ")";               -- new qubit array
+CNewArr. Cmd ::= "arrnew" "[" Typ "]" "(" Nat ";" Var "." Cmd ")";               -- new qubit array
 CGap.    Cmd ::= Uni "(" Exp ")";                                        -- unitary gate application
 CDiag.   Cmd ::= "D" "(" Uni "," Uni ";" Exp "," Exp ")";                -- diagonal gate application
 CMeas.   Cmd ::= "meas" "(" Exp ")";                                     -- measurement
