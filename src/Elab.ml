@@ -34,7 +34,7 @@ type env_t = {qrefs: int Strmap.t; qalls: int Strmap.t; vars: typ Strmap.t}
 
 (* checks if two types are equal *)
 let rec equal_types_bool (ty1 : typ) (ty2 : typ) : bool =
-  (* when would this case actually come up? *)
+  (*  when would this case actually come up? *)
   match (ty1, ty2) with
   | TTVar tv1, TTVar tv2 ->
       tv1 = tv2
@@ -87,6 +87,22 @@ let rec gen_qubits (var : string) (len : int) (env : env_t) : typ * env_t =
     (* let q_exp = EVar (MVar (Ident qname)) in  *)
     let qs, env'' = gen_qubits var (len - 1) env' in
     (qtype, env'')
+
+(****************************)
+(* qubit param name helpers *)
+(****************************)
+
+let add_qubit_index (qlty : typ) (ind : int) : typ =
+  match qlty with
+  | TQAll (MKVar (Ident qlname)) ->
+      let qname = qlname ^ "_" ^ string_of_int ind in
+      TQAll (MKVar (Ident qname))
+  | TQref (MKey _) ->
+      failwith "How to deal with indexing here?"
+  | _ ->
+      qlty
+
+let extract_qubit_index (qlty : typ) (ind : int) : typ = failwith "TODO"
 
 (*******************************)
 (* Function definition helpers *)
@@ -219,12 +235,18 @@ let rec curry_types (args : (string * typ) list) (pbody : lqsterm)
 
 (* used when replacing an abstract type with a specific type *)
 (* favors first input *)
-let valid_replacement_type (specty : typ) (absty : typ) : typ =
+let rec valid_replacement_type (specty : typ) (absty : typ) : typ =
   match (specty, absty) with
   | TQref _, TQAll _ ->
       specty
   | TQAll _, TQAll _ ->
       specty
+  | _, TArr _ ->
+      failwith "list arg of function param cannot have definite length"
+  | TArr (l, specty'), TAbsArr absty' ->
+      valid_replacement_type specty' absty'
+  | TAbsArr specty', TAbsArr absty' ->
+      valid_replacement_type specty' absty'
   | _ ->
       equal_types specty absty
 
@@ -378,6 +400,7 @@ let rec replace_tyvars (funty : typ) (tvreps : (tVar * typ) list) : typ =
 (*****)
 
 (* note that as long as TDummy never occurs as an output of typeof, we know it will never occur in the final tree *)
+(* TODO: add some basic Z3 checks here *)
 let rec typeof (term : lqsterm) (env : env_t) : typ =
   match term with
   | Left (EVar (MVar (Ident var_name))) -> (
@@ -604,7 +627,9 @@ and elab_args (params : param list) (tyvars : tVar list) (env : env_t) :
       | TpArr TpQbit ->
           (* FIXME: is this correct? or should len(l) qalls be created? *)
           let i = cardinal env'.qalls in
-          let qlisttype = TAbsArr (TQAll (MKVar (Ident (string_of_int i)))) in
+          (* here we give qall keys a slightly different form for lists *)
+          let qlname = "ql" ^ string_of_int i in
+          let qlisttype = TAbsArr (TQAll (MKVar (Ident qlname))) in
           let qalls' = Strmap.add arg i env'.qalls in
           let vars' = Strmap.add arg qlisttype env'.vars in
           let env'' = {env with qalls= qalls'; vars= vars'} in
@@ -945,8 +970,8 @@ and elab_exp (exp : expr) (env : env_t) : exp =
             EArrIdx (TArr (s, ty), lis', ind')
         | ERngL _ ->
             EArrIdx (TArr (s, ty), lis', ind')
-        | EInt _ ->
-            EArrIdx (ty, lis', ind')
+        | EInt integ ->
+            EArrIdx (add_qubit_index ty integ, lis', ind')
         | _ ->
             failwith "incorrect type for indexing into a list"
             (*TODO: bad repeated code from TArr and AAbsArr *) )
@@ -958,8 +983,8 @@ and elab_exp (exp : expr) (env : env_t) : exp =
             EArrIdx (TAbsArr ty, lis', ind')
         | ERngL _ ->
             EArrIdx (TAbsArr ty, lis', ind')
-        | EInt _ ->
-            EArrIdx (ty, lis', ind')
+        | EInt integ ->
+            EArrIdx (add_qubit_index ty integ, lis', ind')
         | _ ->
             failwith "incorrect type for indexing into a list" )
       | _ ->
@@ -970,6 +995,7 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       failwith "TODO: QsEAdj"
   | QsECall (* TODO: This needs to be generalized *)
       ( QsECtrl (QsEName (QUnqual (UIdent "X")))
+        (*TODO: put CNOT constraint here *)
       , QsEArr [QsEName (QUnqual (UIdent ctl))] :: [tgt] ) ->
       ECmd
         ( TUnit
@@ -1066,10 +1092,6 @@ and elab_app (func : exp) (args : exp list) (env : env_t) : exp =
       let tvs, arg1ty, outy = decompose_fun_type funty in
       if contains_poly_type arg1ty then
         let reppairs = safe_replacement (get_tyvar_replacements arg1ty argty) in
-        (* match reppairs with
-           | [(tv, ty)] -> type_mismatch_error (TTVar tv) (replace_single_tyvar funty tv ty)
-           | _ -> failwith "???" *)
-        (* if (List.length reppairs = 1) then failwith "w" else failwith "y)" *)
         EAp (replace_tyvars funty reppairs, argty, func, e)
         (*TODO: add subtyping at this next step *)
       else
