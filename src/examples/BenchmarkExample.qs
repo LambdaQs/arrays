@@ -21,37 +21,54 @@ namespace LambdaQs.Arrays {
         return array[1 ...];
     }
 
-    function Zipped<'T, 'U>(left : 'T[], right : 'U[]) : ('T, 'U)[] {
-        let nElements = Length(left) < Length(right)
-                        ? Length(left)
-                        | Length(right);
 
-        if nElements == 0 {
-            return [];
-        }
+    // function Zipped<'T, 'U>(left : 'T[], right : 'U[]) : ('T, 'U)[] {
+    //     let nElements = Length(left) < Length(right)
+    //                     ? Length(left)
+    //                     | Length(right);
 
-        mutable output = [(left[0], right[0]), size = nElements];
+    //     if nElements == 0 {
+    //         return [];
+    //     }
 
-        for idxElement in 1 .. nElements - 1 {
-            set output w/= idxElement <- (left[idxElement], right[idxElement]);
-        }
+    //     mutable output = [(left[0], right[0]), size = nElements];
 
-        return output;
-    }
+    //     for idxElement in 1 .. nElements - 1 {
+    //         set output w/= idxElement <- (left[idxElement], right[idxElement]);
+    //     }
 
-    function IndexRange<'TElement>(array : 'TElement[]) : Range {
-       return 0..(Length(array) - 1);
-    }
+    //     return output;
+    // }
 
-    operation ApplyToEachCA<'T> (singleElementOperation : ('T => Unit is Adj + Ctl), register : 'T[])
-    : Unit is Adj + Ctl {
-        for idxQubit in IndexRange(register) {
-            singleElementOperation(register[idxQubit]);
-        }
-    }
+    // function IndexRange<'TElement>(array : 'TElement[]) : Range {
+    //    return 0..(Length(array) - 1);
+    // }
 
-    operation ApplyCNOTChain(qubits : Qubit[]) : Unit is Adj + Ctl {
-        ApplyToEachCA(CNOT, Zipped(Most(qubits), Rest(qubits)));
-    }
+    // //if singleElementOperation has a constraint on 'T then register must satisfy for all i in register
+    // //'T can be thought of as 'T + constraint C
+    // //'T = (Qubit<a>, Qubit<b>)
+    // operation ApplyToEachCA<'T> (singleElementOperation : ('T => Unit is Adj + Ctl), register : 'T[])
+    // : Unit is Adj + Ctl {
+    //     for idxQubit in IndexRange(register) {
+    //         singleElementOperation(register[idxQubit]);
+    //     }
+    // }
+
+    // operation ApplyCNOTChain(qubits : Qubit[]) : Unit is Adj + Ctl {
+    //     ApplyToEachCA(CNOT, Zipped(Most(qubits), Rest(qubits)));
+    // }
+
+    // //ApplyToEachCA(Zipped(Most(qubits), Rest(qubits)), CNOT);
+
+    // CNOT[qubits[i], qubit[i+1]]
+
+
+    // // CNOT expects (p,q) where p /= q
+    // // (ApplyToEachCA CNOT) expects [(p,q)] where p /= q
+
+
+
+
+
 
 }

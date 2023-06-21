@@ -43,14 +43,14 @@ namespace Microsoft.Quantum.Arrays {
     //     }
     // }
 
-    // function Rest<'T> (array : 'T[]) : 'T[] {
-    //     return array[1 ...];
-    // }
+    function Rest<'T> (array : 'T[]) : 'T[] {
+        return array[1 ...];
+    }
 
 
-    // function HeadAndRest<'U> (array : 'U[]) : ('U[]) {
-    //     return (Rest(array));
-    // }
+    function HeadAndRest<'U> (array : 'U[]) : ('U[]) {
+        return (Rest(array));
+    }
 
 
 
