@@ -42,11 +42,11 @@ namespace QAlgol {
 
 
 
-  operation NoClone () : Unit {
-    use q1 = Qubit ();
-    use q2 = Qubit ();
-    CNOT ( q1 , q2 );
-  }
+  // operation NoClone () : Unit {
+  //   use q1 = Qubit ();
+  //   use q2 = Qubit ();
+  //   CNOT ( q1 , q2 );
+  // }
 
   operation NoClone2 (input1 : Qubit, input2 : Qubit) : Unit {
     CNOT ( input1 , input2 );

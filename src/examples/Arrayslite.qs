@@ -34,14 +34,14 @@ namespace Microsoft.Quantum.Arrays {
     //     return(Map(array));
     // }
 
-    // function Head<'A> (array : 'A[], def : 'A) : 'A {
-    //     if (Length(array) == 0) {
-    //         return def;
-    //     }
-    //     else {
-    //         return array[0];
-    //     }
-    // }
+    function Head<'A> (array : 'A[], def : 'A) : 'A {
+        if (Length(array) == 0) {
+            return def;
+        }
+        else {
+            return array[0];
+        }
+    }
 
     // function Rest<'T> (array : 'T[]) : 'T[] {
     //     return array[1 ...];
