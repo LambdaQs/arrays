@@ -14,33 +14,54 @@ MUni.  Uni  ::= Ident;    -- unitaries
 MKey.  Key  ::= Nat;  -- qubit symbols/unique keys
 MKVar. KVar ::= Ident;    -- key variables
 
+--TODO: add list type specific for qubit arrays?
 -- Types
-TTVar.   Typ ::= TVar;                           -- type variable
-TQref.   Typ ::= "tqref"   "<" Key ">";          -- qubit reference
-TQAll.   Typ ::= "tqall"   "<" KVar ">";         -- abstract qubit ref
-TFun.    Typ ::= "tfun"    "(" Typ  ";" Typ ")"; -- function
-TAll.    Typ ::= "tall"    "(" TVar "." Typ ")"; -- polymorphic function
-TCmd.    Typ ::= "tcmd"    "(" Typ ")";          -- command
-TProd.   Typ ::= "tprod"   "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
+TTVar.    Typ ::= TVar;                           -- type variable
+TQref.    Typ ::= "tqref"   "<" Key ">";          -- qubit reference
+TQAll.    Typ ::= "tqall"   "<" KVar ">";         -- abstract qubit ref
+TFun.     Typ ::= "tfun"    "(" [TVar] "." [Typ] ";" Typ ")"; -- function with both tvars and types
+TCmd.     Typ ::= "tcmd"    "(" Typ ")";          -- command
+TProd.    Typ ::= "tprod"   "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
+
 TArr.    Typ ::= "tarr"    "(" Nat ";" Typ ")";  -- concrete array
 TAbsArr. Typ ::= "tabsarr" "(" Typ ")";          -- abstract array of arbitrary length
-TRng.    Typ ::= "trange";
-TPauli.  Typ ::= "tpauli";                       -- TODO: consider changing this to sum type
-TUnit.   Typ ::= "tunit";
-TBool.   Typ ::= "tbool";
-TStr.    Typ ::= "tstr";
-TInt.    Typ ::= "tint";
-TDbl.    Typ ::= "tdouble";
-TDummy.  Typ ::= "tdummy";
+-- TArr.     Typ ::= "tarr"    "[" Typ "]";          -- any non qubit array
+-- TQArr.    Typ ::= "tqarr"   "(" Nat ")";          -- concrete qubit array
+-- TAbsQArr. Typ ::= "tabsqarr";                     -- abstract qubit array of arbirary length
+
+TRng.     Typ ::= "trange";
+TPauli.   Typ ::= "tpauli";                       -- TODO: consider changing this to sum type
+TUnit.    Typ ::= "tunit";
+TBool.    Typ ::= "tbool";
+TStr.     Typ ::= "tstr";
+TInt.     Typ ::= "tint";
+TDbl.     Typ ::= "tdouble";
+TDummy.   Typ ::= "tdummy";
+
+
+separator TVar ",";
+
+separator Typ ",";
+
+
+
+-- could be useful shorthand?
+TVar . TypedVar ::= Var ":" Typ;
+TExp . TypedExp ::= Exp ":" Typ;
+
+separator TypedVar ",";
+separator TypedExp ",";
+
 
 -- Expressions
 EVar.     Exp ::= Var;
 EWld.     Exp ::= "_";                                                     -- wildcard
-ELet.     Exp ::= "let" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Exp ")";  -- let expression
-ELam.     Exp ::= "λ"  "[" Typ  ";" Typ "]" "(" Var  "." Exp ")";          -- lambda abstraction
-EAp.      Exp ::= "ap" "[" Typ  ";" Typ "]" "(" Exp  ";" Exp ")";          -- application
-ETLam.    Exp ::= "Λ"  "(" TVar "." Exp ")";                               -- type abstraction
-ETAp.     Exp ::= "tap" "[" TVar "." Typ "]" "(" Exp  ";" Typ ")";         -- type application
+ELet.     Exp ::= "let" Var "be" Exp ":" Typ "in" Exp ":" Typ;             -- let expression
+
+ELam.     Exp ::= "Λ" [TVar] "λ"  [TypedVar] "->" Exp ":" Typ;             -- lambda abstraction
+EAp.      Exp ::= "ap" "[" Exp ":" Typ  ";" [TypedExp] "]";                -- application
+ETAp.     Exp ::= "tap" "[" Exp ":" Typ ";" Typ"]";                        -- type application
+
 ECmd.     Exp ::= "cmd" "[" Typ "]" Cmd;                                   -- encapsulation
 EQloc.    Exp ::= "&" Key;                                                 -- qubit locations TODO: still needed?
 EProj.    Exp ::= "proj" "<" Integer ">" "[" Typ ";" Typ "]" "(" Exp ")";  -- currently just 1 or 2 as these are pairs
@@ -73,16 +94,16 @@ EInt.     Exp ::= "integ" "[" Integer "]";
 EDbl.     Exp ::= "doubl" "[" Double "]";
 EStr.     Exp ::= "str"   "[" String  "]";
 
-internal EVarT. Exp ::= "(" Var ":" Typ ")";
+-- internal EVarT. Exp ::= "(" Var ":" Typ ")";
 
 separator Exp ",";
 
 -- Commands
 CRet.   Cmd ::= "ret" "[" Typ "]" Exp;                                  -- return
-CBnd.   Cmd ::= "bnd" "[" Typ ";" Typ "]" "(" Exp "; " Var "." Cmd ")"; -- sequence
+CBnd.   Cmd ::= "bnd" Var "with" Exp ":" Typ "in" Cmd ":" Typ;          -- sequence
 
 CNew.    Cmd ::= "new"    "[" Typ "]" "(" Var "." Cmd ")";               -- new qubit reference
-CNewArr. Cmd ::= "arrnew" "[" Typ "]" "(" Nat ";" Var "." Cmd ")";               -- new qubit array
+CNewArr. Cmd ::= "arrnew" "[" Typ "]" "(" Nat ";" Var "." Cmd ")";       -- new qubit array
 CGap.    Cmd ::= Uni "(" Exp ")";                                        -- unitary gate application
 CDiag.   Cmd ::= "D" "(" Uni "," Uni ";" Exp "," Exp ")";                -- diagonal gate application
 CMeas.   Cmd ::= "meas" "(" Exp ")";                                     -- measurement
