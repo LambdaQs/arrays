@@ -6,6 +6,8 @@ open String
 open List
 open Either
 
+
+
 (* open Z3 *)
 
 let nyi s = failwith ("NYI: " ^ s)
@@ -55,7 +57,8 @@ let rec equal_types_bool (ty1 : typ) (ty2 : typ) : bool =
   | TQref q1, TQref q2 ->
       q1 = q2
   | TQAll k1, TQAll k2 ->
-      k1 = k2
+      (* TODO: this used to be k1 = k2, but i think it should just be true; SHOULD RUN TESTS! *)
+      true
       (* TODO: figure out what to do with TQRef and TQAll here *)
       (* TODO: this can be made more nuances by replacing tvars which may not exactly be the same *)
   | TFun (tvs1, ins1, ou1), TFun (tvs2, ins2, ou2) -> (
@@ -198,23 +201,30 @@ let rec check_for_qubit_in_input (kv : kVar) (args : typedVar list) : bool =
     | _ ->
         check_for_qubit_in_input kv args' )
 
+
 (* checks the the actual return type is valid *)
-let check_retty (theor_ty : tp) (act_ty : typ) (tyvars : tVar list)
+let check_retty (theor_retty : tp) (act_retty : typ) (tyvars : tVar list)
     (args : typedVar list) : typ =
-  match (theor_ty, act_ty) with
+  match (theor_retty, act_retty) with
   | TpQbit, TQref _ ->
       failwith "trying to return qref that is only in scope of function"
   | TpQbit, TQAll kv ->
-      if check_for_qubit_in_input kv args then act_ty
+    (* FIXME: this step should be more complex in order to check if the returned 
+       qubit type is from an input list. Although where would an awry tqall even come from ??? *)
+      if check_for_qubit_in_input kv args then act_retty
       else failwith "returned TQAll that is not in correct scope"
   | TpArr TpQbit, TArr _ ->
       failwith "TODO: checking for TArr Qubit return type"
-  | TpArr TpQbit, TAbsArr _ ->
-      failwith "TODO: checking for TAbsArr Qubit return type"
+  | TpArr TpQbit, TAbsArr qall ->
+    (* FIXME: from the fixme above, I just assume it would be impossible for a bad TAbsArr to
+       show up, but could check that the return came from a param *)
+       TAbsArr qall
   | TpQbit, _ ->
       failwith "function does not return a qubit"
+      (* FIXME: what about other arrays? We can return an abstract array with a specific array *)
   | _ ->
-      equal_types (elab_type tyvars theor_ty) act_ty
+      equal_types (elab_type tyvars theor_retty) act_retty
+
 
 (********************************)
 (* Function application helpers *)
@@ -224,6 +234,9 @@ let rec valid_application (funty : typ) (argty : typ) : bool = failwith "TODO"
 
 (* used when replacing an abstract type with a specific type *)
 (* favors first input *)
+(* NOTE: this could be used for tvars being replaced with types, but this is done with a different 
+   function, so when this is actually called, the main concern is with qubit replacement *)
+(* FIXME: considering the previus note, this should be improved specifcally for qubits *)
 let rec valid_replacement_type (specty : typ) (absty : typ) : typ =
   match (specty, absty) with
   | TQref _, TQAll _ ->
@@ -232,10 +245,11 @@ let rec valid_replacement_type (specty : typ) (absty : typ) : typ =
       specty
   | _, TArr _ ->
       failwith "list arg of function param cannot have definite length"
+    (* FIXME: this next line seems wrong and the one after that is maybe wrong*)
   | TArr (l, specty'), TAbsArr absty' ->
-      valid_replacement_type specty' absty'
+      TArr (l, valid_replacement_type specty' absty')
   | TAbsArr specty', TAbsArr absty' ->
-      valid_replacement_type specty' absty'
+      TAbsArr (valid_replacement_type specty' absty')
   | _ ->
       equal_types specty absty
 
@@ -253,7 +267,8 @@ let rec checkfor_dup_qubits (tys : typ list) : bool =
   | TQref n :: ts ->
       check_dups (TQref n, ts) || checkfor_dup_qubits ts
   | TQAll n :: ts ->
-      check_dups (TQAll n, ts) || checkfor_dup_qubits ts
+      checkfor_dup_qubits ts
+      (* check_dups (TQAll n, ts) || checkfor_dup_qubits ts *)
   (* TODO: add lists here too? *)
   | t :: ts ->
       checkfor_dup_qubits ts
@@ -315,8 +330,8 @@ let rec get_tyvar_replacements (ty : typ) (argty : typ) : (tVar * typ) list =
       if ty = argty then [] else type_mismatch_error ty argty
 
 (* checks that we don't overload type variables *)
-(* FIXME: this seems wrong... *)
 let rec safe_replacement (replist : (tVar * typ) list) : (tVar * typ) list =
+  (* this function should remove all exact copies of p from ps and through error if there are conflicts with p *)
   let rec remove_dup p ps =
     match (p, ps) with
     | (tv, ty), [] ->
@@ -334,22 +349,23 @@ let rec safe_replacement (replist : (tVar * typ) list) : (tVar * typ) list =
               ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty') )
         else (tv', ty') :: remove_dup p ps'
   in
-  match replist with [] -> [] | p :: ps -> p :: remove_dup p ps
+  match replist with [] -> [] | p :: ps -> p :: remove_dup p (safe_replacement ps)
+
+
 
 (* kind of like filter on tvs and map on tys, loops through funty and replaces tv with replty *)
-(* let rec replace_single_tyvar (funty : typ) (tv : tVar) (replty : typ) : typ =
-   match funty with
-   (* at this step, we filter out the tv that is being replaced *)
-   (* uses monomorphization of polymorphic types *)
-   | TAll (tv', ty) ->
-       if tv = tv' then replace_single_tyvar ty tv replty
-       else TAll (tv', replace_single_tyvar ty tv replty)
-   (* then we map, should never see TAll after this point *)
-   | TFun (ty1, ty2) ->
-       TFun
-         (replace_single_tyvar ty1 tv replty, replace_single_tyvar ty2 tv replty)
+let rec replace_single_tyvar (paramty : typ) (tv : tVar) (replty : typ) : typ =
+   match paramty with
+   | TFun (tvs, intys, outy) ->
+       let tvs' = List.filter (fun tv0 -> tv0 <> tv) tvs in
+       (* FIXME: this step technically wrong since if a function of type `T -> ... is also an argument
+          and `T is overloaded, being a tvar in the outside function that the innard `T will get replaced,
+          buy this is (a) too complex and (b) is probably ambiguous bad coding anyways... *)
+       let intys' = List.map (fun ty0 -> replace_single_tyvar ty0 tv replty) intys in
+       let outy' = replace_single_tyvar outy tv replty in
+       TFun (tvs', intys', outy') 
    | TTVar tv' ->
-       if tv = tv' then replty else funty
+       if tv = tv' then replty else paramty
    | TCmd ty1 ->
        TCmd (replace_single_tyvar ty1 tv replty)
    | TProd (ty1, ty2) ->
@@ -360,14 +376,56 @@ let rec safe_replacement (replist : (tVar * typ) list) : (tVar * typ) list =
    | TAbsArr ty1 ->
        TAbsArr (replace_single_tyvar ty1 tv replty)
    | _ ->
-       funty *)
+      paramty
 
-(* let rec replace_tyvars (funty : typ) (tvreps : (tVar * typ) list) : typ =
+let rec replace_tyvars_in_type (paramty : typ) (tvreps : (tVar * typ) list) : typ =
    match tvreps with
    | [] ->
-       funty
+      paramty
    | (tv, replty) :: tvreps' ->
-       replace_tyvars (replace_single_tyvar funty tv replty) tvreps' *)
+      replace_tyvars_in_type (replace_single_tyvar paramty tv replty) tvreps'
+
+let rec replace_tyvars_in_tvlist (tvs : tVar list) (tvreps : (tVar * typ) list) : tVar list =
+    match tvreps with 
+    | [] -> tvs 
+    | (tv, replty) :: tvreps' ->
+        replace_tyvars_in_tvlist (List.filter (fun tv0 -> tv0 <> tv) tvs) tvreps'
+
+
+let rec apply_to_single_arg (tvs : tVar list) (in1ty : typ) (resttys : typ list) (outy : typ) (argty : typ) : typ =
+  if contains_poly_type in1ty 
+    then 
+        let tvreps = safe_replacement (get_tyvar_replacements in1ty argty) in 
+        let tvs' = replace_tyvars_in_tvlist tvs tvreps in 
+        let resttys' = List.map (fun ty0 -> replace_tyvars_in_type ty0 tvreps) resttys in
+        let outy' = replace_tyvars_in_type outy tvreps in
+        match resttys' with 
+        | [] -> outy' 
+        | _ -> TFun (tvs', resttys', outy')
+    else 
+        let _ = valid_replacement_type in1ty argty in
+        match resttys with 
+        | [] -> outy 
+        | _ -> TFun (tvs, resttys, outy)
+
+
+
+let rec type_of_application (funty : typ) (args : typedExp list) : typ =
+  match funty with 
+  | TFun (tvs, intys, outy) -> 
+    (match intys, args with 
+    | _, [] -> funty
+    | [], a::args -> failwith ("too many arguments to function: "  ^ ShowLambdaQs.show (ShowLambdaQs.showTyp funty))
+    | in1ty :: intys', [TExp (arg1, ty1)] ->
+        let funty' = apply_to_single_arg tvs in1ty intys' outy ty1 in
+        funty'
+    | in1ty :: intys', TExp (arg1, ty1) :: args' -> 
+        let funty' = apply_to_single_arg tvs in1ty intys' outy ty1 in
+        type_of_application funty' args'
+        )
+  | _ -> failwith
+        ( "expected function type, ifnstead got: "
+        ^ ShowLambdaQs.show (ShowLambdaQs.showTyp funty) )
 
 (*****)
 (* This is the main type checker*)
@@ -387,12 +445,12 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
       failwith "TODO: EWld"
   | Left (ELet (v, e1, t1, e2, t2)) ->
       t2 (* TODO: run tests to make sure this is sufficient *)
-  | Left (ELam (tvs, params, ret_e, ret_t)) ->
+  | Left (ELam (tvs, params, ret_e, ret_t, _, _)) ->
       let intys = List.map tv_type params in
       TFun (tvs, intys, ret_t)
   (* note that when we build the Eap, we add the types, so t1 and t2 will be the correct form *)
   | Left (EAp (f, f_ty, args)) ->
-      failwith "TODO"
+      type_of_application f_ty args
   (* NOTE: this is a rare case *)
   | Left (ETAp (f, f_ty, ty_arg)) ->
       failwith "TODO: ETAp"
@@ -534,7 +592,7 @@ and elab_calldec (calld : callDec) (env : env_t) : var * exp * typ =
       in
       let _ = check_retty rettyp ty_body [] params' in
       let fvar = MVar (Ident name) in
-      let fexp = ELam ([], params', body_exp, ty_body) in
+      let fexp = ELam ([], params', body_exp, ty_body, [], []) in
       let fty = TFun ([], List.map tv_type params', ty_body) in
       (fvar, fexp, fty)
   | CDFun (UIdent name, TAList tvars, ParTpl params, rettyp, body) ->
@@ -546,7 +604,7 @@ and elab_calldec (calld : callDec) (env : env_t) : var * exp * typ =
       in
       let _ = check_retty rettyp ty_body tvs' params' in
       let fvar = MVar (Ident name) in
-      let fexp = ELam (tvs', params', body_exp, ty_body) in
+      let fexp = ELam (tvs', params', body_exp, ty_body, [], []) in
       let fty = TFun (tvs', List.map tv_type params', ty_body) in
       (fvar, fexp, fty)
   (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
@@ -558,7 +616,7 @@ and elab_calldec (calld : callDec) (env : env_t) : var * exp * typ =
       in
       let _ = check_retty rettyp ty_body [] params' in
       let fvar = MVar (Ident name) in
-      let fexp = ELam ([], params', body_exp, ty_body) in
+      let fexp = ELam ([], params', body_exp, ty_body, [], []) in
       let fty = TFun ([], List.map tv_type params', ty_body) in
       (fvar, fexp, fty)
   | CDOp (UIdent name, TAList tvars, ParTpl params, rettyp, _, body) ->
@@ -570,7 +628,7 @@ and elab_calldec (calld : callDec) (env : env_t) : var * exp * typ =
       in
       let _ = check_retty rettyp ty_body tvs' params' in
       let fvar = MVar (Ident name) in
-      let fexp = ELam (tvs', params', body_exp, ty_body) in
+      let fexp = ELam (tvs', params', body_exp, ty_body, [], []) in
       let fty = TFun (tvs', List.map tv_type params', ty_body) in
       (fvar, fexp, fty)
 
@@ -589,34 +647,34 @@ and elab_params (tyvars : tVar list) (params : param list) (env : env_t) :
   match params with
   | [] ->
       ([], env)
-  | ParNI (NItem (UIdent arg, argtyp)) :: params' -> (
-      let args, env' = elab_params tyvars params' env in
-      match argtyp with
+  | ParNI (NItem (UIdent parname, partyp)) :: params' -> (
+      let params'', env' = elab_params tyvars params' env in
+      match partyp with
       | TpQbit ->
           (* should probably generate i a different way, but fine for now *)
           let i = cardinal env'.qalls in
           let qtype = TQAll (MKVar (Ident (string_of_int i))) in
-          let qalls' = Strmap.add arg i env'.qalls in
-          let vars' = Strmap.add arg qtype env'.vars in
+          let qalls' = Strmap.add parname i env'.qalls in
+          let vars' = Strmap.add parname qtype env'.vars in
           let env'' = {env' with qalls= qalls'; vars= vars'} in
-          (TVar (MVar (Ident arg), qtype) :: args, env'')
+          (TVar (MVar (Ident parname), qtype) :: params'', env'')
           (* Note that we basically do the same thing for lists of qubits as qubits *)
       | TpArr TpQbit ->
-          (* FIXME: is this correct? or should len(l) qalls be created? *)
+          (* FIXME: what should we do here? Perhaps  *)
           let i = cardinal env'.qalls in
           (* here we give qall keys a slightly different form for lists *)
           let qlname = "ql" ^ string_of_int i in
           let qlisttype = TAbsArr (TQAll (MKVar (Ident qlname))) in
-          let qalls' = Strmap.add arg i env'.qalls in
-          let vars' = Strmap.add arg qlisttype env'.vars in
+          let qalls' = Strmap.add parname i env'.qalls in
+          let vars' = Strmap.add parname qlisttype env'.vars in
           let env'' = {env with qalls= qalls'; vars= vars'} in
-          (TVar (MVar (Ident arg), qlisttype) :: args, env'')
+          (TVar (MVar (Ident parname), qlisttype) :: params'', env'')
           (* TODO: add case for tuple *)
       | _ ->
-          let argtyp' = elab_type tyvars argtyp in
-          let vars' = Strmap.add arg argtyp' env'.vars in
+          let partyp' = elab_type tyvars partyp in
+          let vars' = Strmap.add parname partyp' env'.vars in
           let env'' = {env with vars= vars'} in
-          (TVar (MVar (Ident arg), argtyp') :: args, env'') )
+          (TVar (MVar (Ident parname), partyp') :: params'', env'') )
   | _ ->
       nyi "Nested paramss (ParNIA)"
 
@@ -639,6 +697,9 @@ and elab_qubit_bind (qvar : string) (q : qbitInit) (stmts : stm list)
       in
       (CNew (s_ty, MVar (Ident qvar), s_cmd), env')
       (* TODO: figure out what to do with abstract lengths here *)
+      (* If the number is not abstract, this is totally easy and we just make i new qrefs. The trouble
+         is when the length is abstract because then we make qrefs? but its not clear how many we make. 
+         So its like the start, k, is known, but the offset in k+offset is unknown *)
   | QInitA len ->
       (* FIXME: does not really make sence that qlist will have type qall but contain qrefs *)
       let len' = elab_exp len env in
@@ -939,29 +1000,30 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       let ind' = elab_exp ind env in
       match typeof (Left lis') env with
       | TArr (s, ty) -> (
-        (*TODO: is this correct? We can index into a list with a range, so should be something like this *)
-        match ind' with
-        | ERng _ ->
+        (*FIXME: how to deal with the new length of the list here? *)
+        match typeof (Left ind') env with
+        | TRng ->
+            (* TODO: should EArrIdx hold the type list T or just T??? *)
+            (* Currently, I do things so that the type is the type of the entire statement, so an array 
+                if range or a type if type*)
             EArrIdx (TArr (s, ty), lis', ind')
-        | ERngR _ ->
-            EArrIdx (TArr (s, ty), lis', ind')
-        | ERngL _ ->
-            EArrIdx (TArr (s, ty), lis', ind')
-        | EInt integ ->
-            EArrIdx (add_qubit_index ty integ, lis', ind')
+        | TInt ->
+            (* FIXME: what I do with add_qubit_index here seems odd/overcomplicated 
+               need to figure out how indexing into arrays works when either the array 
+               or the index is abstract. *)
+            EArrIdx (ty, lis', ind')
+            (* FIXME: do something so that we somehow keep track of where indexed qubits come from.
+               If a is a qall list, what type should a[i] have? clearly a qall, perhaps of type k + i??? *)
+            (* EArrIdx (add_qubit_index ty integ, lis', ind') *)
         | _ ->
             failwith "incorrect type for indexing into a list"
             (*TODO: bad repeated code from TArr and AAbsArr *) )
       | TAbsArr ty -> (
-        match ind' with
-        | ERng _ ->
+        match typeof (Left ind') env with
+        | TRng ->
             EArrIdx (TAbsArr ty, lis', ind')
-        | ERngR _ ->
-            EArrIdx (TAbsArr ty, lis', ind')
-        | ERngL _ ->
-            EArrIdx (TAbsArr ty, lis', ind')
-        | EInt integ ->
-            EArrIdx (add_qubit_index ty integ, lis', ind')
+        | TInt ->
+            EArrIdx (ty, lis', ind')
         | _ ->
             failwith "incorrect type for indexing into a list" )
       | _ ->
@@ -1002,8 +1064,12 @@ and elab_exp (exp : expr) (env : env_t) : exp =
           let args = List.map (fun e -> elab_exp e env) es in
           let argtys = List.map (fun e -> typeof (Left e) env) args in
           if checkfor_dup_qubits argtys (*TODO: add better error message *) then
-            failwith "clone error!"
-          else elab_app fexp fty args argtys env
+            failwith ("clone error!" )
+          else 
+            let ap_exp = elab_app fexp fty args argtys env in
+            (* this is where we type check the final function application (other checks are run within elab_app)*)
+            let _ = typeof (Left ap_exp) env in 
+            ap_exp
       | _ ->
           failwith
             ( "expected function type, instead got: "
@@ -1061,36 +1127,28 @@ and elab_exp (exp : expr) (env : env_t) : exp =
   | x ->
       nyi (ShowQSharp.show (ShowQSharp.showExpr x))
 
-(* TODO: write function that takes in this expr list and checks for duplicated qubits *)
-(* NOTE: the type of the function being applied might change, but typeof funcname should always
-   return the origional type of the function, so this can always be checked to ensure safety *)
+(* Note: potential duplicate arguments are now checked in elab_exp (only qubits, not functions) *)
+(* NOTE: unlike origionally, EAp now holds the more abstract type of the function being applied - no monomorphization occurs.
+   Thus, instead we get the specific type of the partially applied function with typeof *)
 and elab_app (func : exp) (funty : typ) (args : exp list) (argtys : typ list)
-    (env : env_t) : exp =
-  match (args, argtys) with
-  | [], [] ->
-      failwith "applying function to zero arguments"
-  | [arg], [argty] ->
-      if valid_application funty argty then
-        match func with
-        | EAp (func', funty', args') ->
-            EAp (func', funty', args' @ [TExp (arg, argty)])
-        | _ ->
-            EAp (func, funty, [TExp (arg, argty)])
-      else
-        failwith
-          ( "trying to replace a single type variable with two different \
-             types: \n\n\
-            \                 funty: "
-          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp funty)
-          ^ "\nargty: "
-          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp argty) )
-  | arg :: args', argty :: argtys' ->
-      (* we only look at types, so the fact that the exp looks akward is fine for the recursion *)
-      let f_to_e = elab_app func funty [arg] [argty] env in
-      let f_to_e_ty = typeof (Left f_to_e) env in
-      elab_app f_to_e f_to_e_ty args' argtys' env
-  | _, _ ->
-      failwith "impossible case since argtys is a map over args"
+   (env : env_t) : exp =
+ match (args, argtys) with
+ | [], [] ->
+     failwith "applying function to zero arguments"
+ | [arg], [argty] ->
+       (match func with
+       | EAp (func', funty', args') ->
+           EAp (func', funty', args' @ [TExp (arg, argty)])
+       | _ ->
+           EAp (func, funty, [TExp (arg, argty)]))
+ | arg :: args', argty :: argtys' ->
+     (* we only look at types, so the fact that the exp looks akward is fine for the recursion *)
+     let f_to_e = elab_app func funty [arg] [argty] env in
+     let f_to_e_ty = typeof (Left f_to_e) env in
+     elab_app f_to_e f_to_e_ty args' argtys' env
+ | _, _ ->
+     failwith "impossible case since argtys is a map over args"
+
 
 let parse (c : in_channel) : doc =
   ParQSharp.pDoc LexQSharp.token (Lexing.from_channel c)

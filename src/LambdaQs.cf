@@ -52,13 +52,24 @@ TExp . TypedExp ::= Exp ":" Typ;
 separator TypedVar ",";
 separator TypedExp ",";
 
+-- Constraints
+CLt.      Constr ::= "constr" Exp "<" Exp;
+CLe.      Constr ::= "constr" Exp "<=" Exp;
+CGt.      Constr ::= "constr" Exp ">" Exp;
+CGe.      Constr ::= "constr" Exp ">=" Exp;
+CEq.      Constr ::= "constr" Exp "=" Exp;
+Cforall.  Constr ::= "forall" Var "," Exp;
+
+separator Constr ",";
+
 
 -- Expressions
 EVar.     Exp ::= Var;
 EWld.     Exp ::= "_";                                                     -- wildcard
 ELet.     Exp ::= "let" Var "be" Exp ":" Typ "in" Exp ":" Typ;             -- let expression
 
-ELam.     Exp ::= "Λ" [TVar] "λ"  [TypedVar] "->" Exp ":" Typ;             -- lambda abstraction
+-- TODO: also add these in types, but a bit unclear how to do the refinements
+ELam.     Exp ::= "Λ" [TVar] "λ"  [TypedVar] "->" Exp ":" Typ "requires" [Constr] "ensures" [Constr]; -- lambda abstraction
 EAp.      Exp ::= "ap" "[" Exp ":" Typ  ";" [TypedExp] "]";                -- application
 ETAp.     Exp ::= "tap" "[" Exp ":" Typ ";" Typ"]";                        -- type application
 
