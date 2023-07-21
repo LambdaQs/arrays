@@ -19,7 +19,7 @@ MKVar. KVar ::= Ident;    -- key variables
 TTVar.    Typ ::= TVar;                           -- type variable
 TQref.    Typ ::= "tqref"   "<" Key ">";          -- qubit reference
 TQAll.    Typ ::= "tqall"   "<" KVar ">";         -- abstract qubit ref
-TFun.     Typ ::= "tfun"    "(" [TVar] "." [Typ] ";" Typ ")"; -- function with both tvars and types
+TFun.     Typ ::= "tfun"    "(" [TVar] "." [Typ] ";" Typ  "requires" [Constr] "ensures" [Constr] ")"; -- function with both tvars and types
 TCmd.     Typ ::= "tcmd"    "(" Typ ")";          -- command
 TProd.    Typ ::= "tprod"   "(" Typ ";" Typ ")";  -- TODO: also add a variadic product type
 
@@ -46,30 +46,38 @@ separator Typ ",";
 
 
 -- could be useful shorthand?
-TVar . TypedVar ::= Var ":" Typ;
-TExp . TypedExp ::= Exp ":" Typ;
+--FIXME: TypedVar is a bad name for this
+TyVar . TypedVar ::= Var ":" Typ;
+TyExp . TypedExp ::= Exp ":" Typ;
 
 separator TypedVar ",";
 separator TypedExp ",";
 
+-- TODO: instead of making these Exp, could make BooleanExp? )
 -- Constraints
+CBool.    Constr ::= "constr" Exp;
 CLt.      Constr ::= "constr" Exp "<" Exp;
 CLe.      Constr ::= "constr" Exp "<=" Exp;
 CGt.      Constr ::= "constr" Exp ">" Exp;
 CGe.      Constr ::= "constr" Exp ">=" Exp;
 CEq.      Constr ::= "constr" Exp "=" Exp;
-Cforall.  Constr ::= "forall" Var "," Exp;
+CNeq.     Constr ::= "constr" Exp "<>" Exp;
+CAnd.     Constr ::= "constr" Constr "||" Constr;
+COr.      Constr ::= "constr" Constr "&&" Constr;
+CImp.     Constr ::= "constr" Constr "->" Constr;
+CForall.  Constr ::= "forall" Var "," Constr;
 
 separator Constr ",";
 
 
 -- Expressions
 EVar.     Exp ::= Var;
+EArg.     Exp ::= Nat;
 EWld.     Exp ::= "_";                                                     -- wildcard
 ELet.     Exp ::= "let" Var "be" Exp ":" Typ "in" Exp ":" Typ;             -- let expression
 
 -- TODO: also add these in types, but a bit unclear how to do the refinements
-ELam.     Exp ::= "Λ" [TVar] "λ"  [TypedVar] "->" Exp ":" Typ "requires" [Constr] "ensures" [Constr]; -- lambda abstraction
+ELam.     Exp ::= "Λ" [TVar] "λ"  [TypedVar] "->" Exp ":" Typ; -- lambda abstraction
 EAp.      Exp ::= "ap" "[" Exp ":" Typ  ";" [TypedExp] "]";                -- application
 ETAp.     Exp ::= "tap" "[" Exp ":" Typ ";" Typ"]";                        -- type application
 
