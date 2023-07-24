@@ -53,7 +53,15 @@ TyExp . TypedExp ::= Exp ":" Typ;
 separator TypedVar ",";
 separator TypedExp ",";
 
--- TODO: instead of making these Exp, could make BooleanExp? )
+
+--TODO: use these so we dont need to deal with Exps in the constraints
+-- base expressions that can appear in a constr
+-- BArg.    Base ::= Nat;
+-- BRet.    Base ::= "RET";
+
+--TODO: could also use boolexp, making the grammar below more granular. Note that we already have lt, le, etc... and
+--there is an urge to add duplicate +
+
 -- Constraints
 CBool.    Constr ::= "constr" Exp;
 CLt.      Constr ::= "constr" Exp "<" Exp;
