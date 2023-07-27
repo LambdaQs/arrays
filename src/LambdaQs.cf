@@ -47,11 +47,11 @@ separator Typ ",";
 
 -- could be useful shorthand?
 --FIXME: TypedVar is a bad name for this
-TyVar . TypedVar ::= Var ":" Typ;
-TyExp . TypedExp ::= Exp ":" Typ;
+Param . Param ::= Var ":" Typ;
+Arg . Arg ::= Exp ":" Typ;
 
-separator TypedVar ",";
-separator TypedExp ",";
+separator Param ",";
+separator Arg ",";
 
 
 --TODO: use these so we dont need to deal with Exps in the constraints
@@ -85,8 +85,8 @@ EWld.     Exp ::= "_";                                                     -- wi
 ELet.     Exp ::= "let" Var "be" Exp ":" Typ "in" Exp ":" Typ;             -- let expression
 
 -- TODO: also add these in types, but a bit unclear how to do the refinements
-ELam.     Exp ::= "Λ" [TVar] "λ"  [TypedVar] "->" Exp ":" Typ; -- lambda abstraction
-EAp.      Exp ::= "ap" "[" Exp ":" Typ  ";" [TypedExp] "]";                -- application
+ELam.     Exp ::= "Λ" [TVar] "λ"  [Param] "->" Exp ":" Typ; -- lambda abstraction
+EAp.      Exp ::= "ap" "[" Exp ":" Typ  ";" [Arg] "]";                -- application
 ETAp.     Exp ::= "tap" "[" Exp ":" Typ ";" Typ"]";                        -- type application
 
 ECmd.     Exp ::= "cmd" "[" Typ "]" Cmd;                                   -- encapsulation
@@ -94,6 +94,8 @@ EQloc.    Exp ::= "&" Key;                                                 -- qu
 EProj.    Exp ::= "proj" "<" Integer ">" "[" Typ ";" Typ "]" "(" Exp ")";  -- currently just 1 or 2 as these are pairs
 EPair.    Exp ::= "pair" "[" Typ ";" Typ "]" "(" Exp ";" Exp ")";          -- TODO: support variadic tuples
 ETriv.    Exp ::= "<>";                                                    -- can also call it null
+
+
 ETrue.    Exp ::= "true";
 EFls.     Exp ::= "false";
 EIte.     Exp ::= "if" "[" Typ "]" "(" Exp ";" Exp ";" Exp ")";

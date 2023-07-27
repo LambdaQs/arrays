@@ -49,12 +49,12 @@ TAList  . TyArg ::= "<" [TIdent] ">";
 
 separator TIdent ",";
 
-ParTpl . ParamTpl ::= "(" [Param] ")";
+ParTpl . ParamTpl ::= "(" [Paramtr] ")";
 
-separator Param ",";
+separator Paramtr ",";
 
-ParNI  . Param ::= NamedItem;
-ParNIA . Param ::= ParamTpl ;
+ParNI  . Paramtr ::= NamedItem;
+ParNIA . Paramtr ::= ParamTpl ;
 
 CEmpty. Chars ::= ;
 CIs.    Chars ::= "is" CharsExp;

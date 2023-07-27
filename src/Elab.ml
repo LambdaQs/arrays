@@ -8,18 +8,15 @@ open Either
 
 (* open Z3 *)
 
-let print_exp (e : exp) = ShowLambdaQs.show (ShowLambdaQs.showExp e)
+let exp_to_string (e : exp) = ShowLambdaQs.show (ShowLambdaQs.showExp e)
 
-let print_typ (t : typ) = ShowLambdaQs.show (ShowLambdaQs.showTyp t)
+let typ_to_string (t : typ) = ShowLambdaQs.show (ShowLambdaQs.showTyp t)
 
 let nyi s = failwith ("NYI: " ^ s)
 
 let type_mismatch_error ty1 ty2 =
   failwith
-    ( "type mismatch:\nty1: "
-    ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty1)
-    ^ "\nty2: "
-    ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty2) )
+    ("type mismatch:\nty1: " ^ typ_to_string ty1 ^ "\nty2: " ^ typ_to_string ty2)
 
 type lqsterm = (exp, cmd) Either.t
 
@@ -38,13 +35,13 @@ type env_t = {qrefs: int Strmap.t; qalls: int Strmap.t; vars: typ Strmap.t}
 (* Basic projection functions *)
 (******************************)
 
-let tv_var (tv : typedVar) : var = match tv with TyVar (v, t) -> v
+let get_param_var (p : param) : var = match p with Param (v, t) -> v
 
-let tv_type (tv : typedVar) : typ = match tv with TyVar (v, t) -> t
+let get_param_type (p : param) : typ = match p with Param (v, t) -> t
 
-let te_exp (te : typedExp) : exp = match te with TyExp (e, t) -> e
+let get_arg_exp (a : arg) : exp = match a with Arg (e, t) -> e
 
-let te_type (te : typedExp) : typ = match te with TyExp (v, t) -> t
+let get_arg_type (a : arg) : typ = match a with Arg (v, t) -> t
 
 (**************************)
 (* General typing helpers *)
@@ -186,31 +183,31 @@ let rec elab_type (tyvars : tVar list) (qstyp : tp) : typ =
   | TpUnit ->
       TUnit
 
-let rec check_for_qubit_in_input (kv : kVar) (args : typedVar list) : bool =
+let rec check_for_qubit_in_input (kv : kVar) (args : param list) : bool =
   match args with
   | [] ->
       false
-  | TyVar (MVar (Ident s), ty) :: args' -> (
+  | Param (MVar (Ident s), ty) :: args' -> (
     match ty with
     | TQAll kv' ->
         kv = kv' || check_for_qubit_in_input kv args'
         (* just split up the product, not the nicest code though*)
     | TProd (t1, t2) ->
         check_for_qubit_in_input kv
-          ( TyVar (MVar (Ident "t1"), t1)
-          :: TyVar (MVar (Ident "t2"), t2)
+          ( Param (MVar (Ident "t1"), t1)
+          :: Param (MVar (Ident "t2"), t2)
           :: args' )
         (*FIXME: make more clear and also do we just let qubits have the same kvar as their list? *)
     | TArr (l, ty) ->
-        check_for_qubit_in_input kv (TyVar (MVar (Ident "list"), ty) :: args')
+        check_for_qubit_in_input kv (Param (MVar (Ident "list"), ty) :: args')
     | TAbsArr ty ->
-        check_for_qubit_in_input kv (TyVar (MVar (Ident "list"), ty) :: args')
+        check_for_qubit_in_input kv (Param (MVar (Ident "list"), ty) :: args')
     | _ ->
         check_for_qubit_in_input kv args' )
 
 (* checks the the actual return type is valid *)
 let check_retty (theor_retty : tp) (act_retty : typ) (tyvars : tVar list)
-    (args : typedVar list) : typ =
+    (args : param list) : typ =
   match (theor_retty, act_retty) with
   | TpQbit, TQref _ ->
       failwith "trying to return qref that is only in scope of function"
@@ -348,10 +345,8 @@ let rec safe_replacement (replist : (tVar * typ) list) : (tVar * typ) list =
             failwith
               ( "trying to replace a single type variable with two different \
                  types: \n\n\
-                \                 ty1: "
-              ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty)
-              ^ "\nty2: "
-              ^ ShowLambdaQs.show (ShowLambdaQs.showTyp ty') )
+                \                 ty1: " ^ typ_to_string ty ^ "\nty2: "
+              ^ typ_to_string ty' )
         else (tv', ty') :: remove_dup p ps'
   in
   match replist with
@@ -417,26 +412,22 @@ let rec apply_to_single_arg (tvs : tVar list) (in1ty : typ) (resttys : typ list)
     let _ = valid_replacement_type in1ty argty in
     match resttys with [] -> outy | _ -> TFun (tvs, resttys, outy, [], [])
 
-let rec type_of_application (funty : typ) (args : typedExp list) : typ =
+let rec type_of_application (funty : typ) (args : arg list) : typ =
   match funty with
   | TFun (tvs, intys, outy, _, _) -> (
     match (intys, args) with
     | _, [] ->
         funty
     | [], a :: args ->
-        failwith
-          ( "too many arguments to function: "
-          ^ ShowLambdaQs.show (ShowLambdaQs.showTyp funty) )
-    | in1ty :: intys', [TyExp (arg1, ty1)] ->
+        failwith ("too many arguments to function: " ^ typ_to_string funty)
+    | in1ty :: intys', [Arg (arg1, ty1)] ->
         let funty' = apply_to_single_arg tvs in1ty intys' outy ty1 in
         funty'
-    | in1ty :: intys', TyExp (arg1, ty1) :: args' ->
+    | in1ty :: intys', Arg (arg1, ty1) :: args' ->
         let funty' = apply_to_single_arg tvs in1ty intys' outy ty1 in
         type_of_application funty' args' )
   | _ ->
-      failwith
-        ( "expected function type, ifnstead got: "
-        ^ ShowLambdaQs.show (ShowLambdaQs.showTyp funty) )
+      failwith ("expected function type, ifnstead got: " ^ typ_to_string funty)
 
 (*****)
 (* This is the main type checker*)
@@ -460,7 +451,7 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
   | Left (ELet (v, e1, t1, e2, t2)) ->
       t2 (* TODO: run tests to make sure this is sufficient *)
   | Left (ELam (tvs, params, ret_e, ret_t)) ->
-      let intys = List.map tv_type params in
+      let intys = List.map get_param_type params in
       TFun (tvs, intys, ret_t, [], [])
   (* note that when we build the Eap, we add the types, so t1 and t2 will be the correct form *)
   | Left (EAp (f, f_ty, args)) ->
@@ -607,7 +598,7 @@ and elab_calldec (calld : callDec) (env : env_t) : var * exp * typ =
       let _ = check_retty rettyp ty_body [] params' in
       let fvar = MVar (Ident name) in
       let fexp = ELam ([], params', body_exp, ty_body) in
-      let fty = TFun ([], List.map tv_type params', ty_body, [], []) in
+      let fty = TFun ([], List.map get_param_type params', ty_body, [], []) in
       (fvar, fexp, fty)
   | CDFun (UIdent name, TAList tvars, ParTpl params, rettyp, body) ->
       let tvs' = elab_tyvars tvars in
@@ -619,7 +610,7 @@ and elab_calldec (calld : callDec) (env : env_t) : var * exp * typ =
       let _ = check_retty rettyp ty_body tvs' params' in
       let fvar = MVar (Ident name) in
       let fexp = ELam (tvs', params', body_exp, ty_body) in
-      let fty = TFun (tvs', List.map tv_type params', ty_body, [], []) in
+      let fty = TFun (tvs', List.map get_param_type params', ty_body, [], []) in
       (fvar, fexp, fty)
   (* TODO: what do we want to do with characteristics? We're currently ignoring them *)
   | CDOp (UIdent name, TAEmpty, ParTpl params, rettyp, _, body) ->
@@ -631,7 +622,7 @@ and elab_calldec (calld : callDec) (env : env_t) : var * exp * typ =
       let _ = check_retty rettyp ty_body [] params' in
       let fvar = MVar (Ident name) in
       let fexp = ELam ([], params', body_exp, ty_body) in
-      let fty = TFun ([], List.map tv_type params', ty_body, [], []) in
+      let fty = TFun ([], List.map get_param_type params', ty_body, [], []) in
       (fvar, fexp, fty)
   | CDOp (UIdent name, TAList tvars, ParTpl params, rettyp, _, body) ->
       let tvs' = elab_tyvars tvars in
@@ -643,7 +634,7 @@ and elab_calldec (calld : callDec) (env : env_t) : var * exp * typ =
       let _ = check_retty rettyp ty_body tvs' params' in
       let fvar = MVar (Ident name) in
       let fexp = ELam (tvs', params', body_exp, ty_body) in
-      let fty = TFun (tvs', List.map tv_type params', ty_body, [], []) in
+      let fty = TFun (tvs', List.map get_param_type params', ty_body, [], []) in
       (fvar, fexp, fty)
 
 (* very simple function that translates the tIdents to tVars, basically just a map *)
@@ -656,8 +647,8 @@ and elab_tyvars (tyvars : tIdent list) : tVar list =
       MTVar (Ident tvstr) :: elab_tyvars tvs
 
 (* processes function parameters. Note that we can process in either order, here we start with the nth arg *)
-and elab_params (tyvars : tVar list) (params : param list) (env : env_t) :
-    typedVar list * env_t =
+and elab_params (tyvars : tVar list) (params : paramtr list) (env : env_t) :
+    param list * env_t =
   match params with
   | [] ->
       ([], env)
@@ -671,7 +662,7 @@ and elab_params (tyvars : tVar list) (params : param list) (env : env_t) :
         let vars' = Strmap.add parname qtype env.vars in
         let env' = {env with qalls= qalls'; vars= vars'} in
         let params'', env'' = elab_params tyvars params' env' in
-        (TyVar (MVar (Ident parname), qtype) :: params'', env'')
+        (Param (MVar (Ident parname), qtype) :: params'', env'')
         (* Note that we basically do the same thing for lists of qubits as qubits *)
     | TpArr TpQbit ->
         (* FIXME: what should we do here? Perhaps  *)
@@ -683,14 +674,14 @@ and elab_params (tyvars : tVar list) (params : param list) (env : env_t) :
         let vars' = Strmap.add parname qlisttype env.vars in
         let env' = {env with qalls= qalls'; vars= vars'} in
         let params'', env'' = elab_params tyvars params' env' in
-        (TyVar (MVar (Ident parname), qlisttype) :: params'', env'')
+        (Param (MVar (Ident parname), qlisttype) :: params'', env'')
         (* TODO: add case for tuple *)
     | _ ->
         let partyp' = elab_type tyvars partyp in
         let vars' = Strmap.add parname partyp' env.vars in
         let env' = {env with vars= vars'} in
         let params'', env'' = elab_params tyvars params' env' in
-        (TyVar (MVar (Ident parname), partyp') :: params'', env'') )
+        (Param (MVar (Ident parname), partyp') :: params'', env'') )
   | _ ->
       nyi "Nested paramss (ParNIA)"
 
@@ -1087,9 +1078,8 @@ and elab_exp (exp : expr) (env : env_t) : exp =
             let _ = typeof (Left ap_exp) env in
             ap_exp
       | _ ->
-          failwith
-            ( "expected function type, instead got: "
-            ^ ShowLambdaQs.show (ShowLambdaQs.showTyp fty) ) )
+          failwith ("expected function type, instead got: " ^ typ_to_string fty)
+      )
   | QsEPos _ ->
       failwith "TODO: QsEPos"
   | QsENeg _ ->
@@ -1154,9 +1144,9 @@ and elab_app (func : exp) (funty : typ) (args : exp list) (argtys : typ list)
   | [arg], [argty] -> (
     match func with
     | EAp (func', funty', args') ->
-        EAp (func', funty', args' @ [TyExp (arg, argty)])
+        EAp (func', funty', args' @ [Arg (arg, argty)])
     | _ ->
-        EAp (func, funty, [TyExp (arg, argty)]) )
+        EAp (func, funty, [Arg (arg, argty)]) )
   | arg :: args', argty :: argtys' ->
       (* we only look at types, so the fact that the exp looks akward is fine for the recursion *)
       let f_to_e = elab_app func funty [arg] [argty] env in
@@ -1168,23 +1158,26 @@ and elab_app (func : exp) (funty : typ) (args : exp list) (argtys : typ list)
 let parse (c : in_channel) : doc =
   ParQSharp.pDoc LexQSharp.token (Lexing.from_channel c)
 
-let elab_main () =
-  (* TODO: add real cmd line arg parsing *)
-  if Array.length Sys.argv != 2 then failwith "Usage: ./TestElab <filename>"
-  else
-    let channel = open_in Sys.argv.(1) in
-    let in_ast = parse channel in
-    print_string
-      ( "[Input abstract syntax]\n\n"
-      ^ (fun x -> ShowQSharp.show (ShowQSharp.showDoc x)) in_ast
-      ^ "\n\n" ) ;
-    (* TODO: create an environment where basic functions are defined *)
-    let out_ast = elab in_ast {qrefs= empty; qalls= empty; vars= empty} in
-    print_string
-      ( "[Output abstract syntax]\n\n"
-      ^ (fun x -> ShowLambdaQs.show (ShowLambdaQs.showExp x)) out_ast
-      ^ "\n\n[Linearized tree]\n\n"
-      ^ PrintLambdaQs.printTree PrintLambdaQs.prtExp out_ast
-      ^ "\n" );;
+(* What follows was moved to Run_elab.ml *)
 
-elab_main ()
+(* let elab_main () =
+     (* TODO: add real cmd line arg parsing *)
+     if Array.length Sys.argv != 2 then failwith "Usage: ./TestElab <filename>"
+     else
+       let channel = open_in Sys.argv.(1) in
+       let in_ast = parse channel in
+       print_string
+         ( "[Input abstract syntax]\n\n"
+         ^ (fun x -> ShowQSharp.show (ShowQSharp.showDoc x)) in_ast
+         ^ "\n\n" ) ;
+       (* TODO: create an environment where basic functions are defined *)
+       let out_ast = elab in_ast {qrefs= empty; qalls= empty; vars= empty} in
+       print_string
+         ( "[Output abstract syntax]\n\n"
+         ^ (fun x -> ShowLambdaQs.show (ShowLambdaQs.showExp x)) out_ast
+         ^ "\n\n[Linearized tree]\n\n"
+         ^ PrintLambdaQs.printTree PrintLambdaQs.prtExp out_ast
+         ^ "\n" )
+   ;; *)
+
+(* elab_main() *)

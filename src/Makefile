@@ -24,6 +24,9 @@ genclean: clean
 cleanall: genclean
 	rm -f *.mll *.mly *LambdaQs.ml *QSharp.ml bnfc.mk BNFC_Util.ml
 
+cleangrammars: 
+	rm -f Abs* Lex* Par* Print* Skel* Show* Test*
+
 genhaskell: QSharp.cf
 	bnfc -mbnfc.mk QSharp.cf && make all
 

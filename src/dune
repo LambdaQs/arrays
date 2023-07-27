@@ -1,0 +1,86 @@
+
+;tells dune to be more lax with some warnings
+(env 
+ (dev
+  (flags (:standard -w -39-27-33))))
+
+
+; Rule for generating files from QSharp.cf
+(rule
+ (targets AbsQSharp.ml LexQSharp.mll ParQSharp.mly SkelQSharp.ml PrintQSharp.ml ShowQSharp.ml TestQSharp.ml BNFC_Util.ml)
+ (deps QSharp.cf)
+ (action (run bnfc -mbnfc.mk --ocaml-menhir %{deps}))
+ ; (mode promote)
+ )
+
+; Rule for generating files from LambdaQs.cf
+(rule
+ (targets AbsLambdaQs.ml LexLambdaQs.mll ParLambdaQs.mly SkelLambdaQs.ml PrintLambdaQs.ml ShowLambdaQs.ml TestLambdaQs.ml)
+ (deps LambdaQs.cf)
+ (action (run bnfc -mbnfc.mk --ocaml-menhir %{deps}))
+ ; (mode promote)
+ )
+
+; OCamllex rule for QSharp lexer
+(rule
+ (targets LexQSharp.ml)
+ (deps LexQSharp.mll)
+ (action (run ocamllex %{deps})))
+
+; Menhir rule for QSharp parser
+(rule
+ (targets ParQSharp.ml ParQSharp.mli)
+ (deps ParQSharp.mly)
+ (action (run menhir --explain --ocamlc "-I +compiler-libs" %{deps})))
+
+; OCamllex rule for LambdaQs lexer
+(rule
+ (targets LexLambdaQs.ml)
+ (deps LexLambdaQs.mll)
+ (action (run ocamllex %{deps})))
+
+; Menhir rule for LambdaQs parser
+(rule
+ (targets ParLambdaQs.ml ParLambdaQs.mli)
+ (deps ParLambdaQs.mly)
+ (action (run menhir --explain --ocamlc "-I +compiler-libs" %{deps})))
+
+
+; Library and executable definitions as before
+
+; to import, must type open G__AbsQSharp, etc...
+; (library
+;  (name g)
+;  (modules AbsQSharp LexQSharp ParQSharp PrintQSharp SkelQSharp ShowQSharp AbsLambdaQs LexLambdaQs ParLambdaQs PrintLambdaQs SkelLambdaQs ShowLambdaQs))
+
+(library
+ (name qsharp_grammar)
+ (modules AbsQSharp LexQSharp ParQSharp PrintQSharp SkelQSharp ShowQSharp)
+ (wrapped false)) ;for some reason, need this for the grammar libraries, or to 
+
+(library
+ (name lambdaqs_grammar)
+ (modules AbsLambdaQs LexLambdaQs ParLambdaQs PrintLambdaQs SkelLambdaQs ShowLambdaQs)
+ (wrapped false))
+
+(library
+ (name elab)
+ (modules Elab)
+ (libraries qsharp_grammar lambdaqs_grammar))
+
+(executable
+ (name run_elab)
+ (modules Run_elab)  ; The module name corresponds to "Run_elab.ml"
+ (libraries elab)
+ (modes native))
+
+; (library
+;  (name clonecheck)
+;  (modules Clonecheck)
+;  (libraries elab z3))
+
+(executable
+ (name clonecheck)
+ (modules Clonecheck SampleLQSProgs)  ; The module name corresponds to "Run_clonecheck.ml"
+ (libraries elab z3 lambdaqs_grammar)
+ (modes native))
