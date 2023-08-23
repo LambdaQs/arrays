@@ -62,32 +62,49 @@ separator Arg ",";
 --TODO: could also use boolexp, making the grammar below more granular. Note that we already have lt, le, etc... and
 --there is an urge to add duplicate +
 
--- Constraints
-CBool.    Constr ::= "constr" Exp;
-CLt.      Constr ::= "constr" Exp "<" Exp;
-CLe.      Constr ::= "constr" Exp "<=" Exp;
-CGt.      Constr ::= "constr" Exp ">" Exp;
-CGe.      Constr ::= "constr" Exp ">=" Exp;
-CEq.      Constr ::= "constr" Exp "=" Exp;
-CNeq.     Constr ::= "constr" Exp "<>" Exp;
-CAnd.     Constr ::= "constr" Constr "||" Constr;
-COr.      Constr ::= "constr" Constr "&&" Constr;
-CImp.     Constr ::= "constr" Constr "->" Constr;
-CForall.  Constr ::= "forall" Var "," Constr;
 
+--Constraint expressions (just to be used in the constraints)
+--CrExp.     ConstrExp ::= Exp;
+CrApp.     ConstrExp ::= "capp" Var "(" [ConstrExp] ")";
+CrArg.     ConstrExp ::= Integer;                                                 
+CrRet.     ConstrExp ::= "RET";
+CrExi.     ConstrExp ::= Ident;
+CrInt.     ConstrExp ::= Integer;   
+CrAdd.     ConstrExp ::= "cradd" ConstrExp ConstrExp;
+CrSub.     ConstrExp ::= "crsub" ConstrExp ConstrExp;
+CrIdx.     ConstrExp ::= "cridx" ConstrExp ConstrExp;
+CrLen.     ConstrExp ::= "crlen" ConstrExp;
+
+-- Constraints
+-- CrBool.    Constr ::= "constr" Exp;
+CrIsRange.   Constr ::= "isrange" ConstrExp;
+CrLt.      Constr ::= "constr" ConstrExp "<" ConstrExp;
+CrLe.      Constr ::= "constr" ConstrExp "<=" ConstrExp;
+CrGt.      Constr ::= "constr" ConstrExp ">" ConstrExp;
+CrGe.      Constr ::= "constr" ConstrExp ">=" ConstrExp;
+CrEq.      Constr ::= "constr" ConstrExp "=" ConstrExp;
+CrNeq.     Constr ::= "constr" ConstrExp "<>" ConstrExp;
+CrAnd.     Constr ::= "constr" Constr "||" Constr;
+CrOr.      Constr ::= "constr" Constr "&&" Constr;
+CrImp.     Constr ::= "constr" Constr "->" Constr;
+CrForall.  Constr ::= "forall" Ident "," Constr;
+
+separator ConstrExp ",";
 separator Constr ",";
 
 
 -- Expressions
 EVar.     Exp ::= Var;
-EArg.     Exp ::= Nat;
+
 EWld.     Exp ::= "_";                                                     -- wildcard
 ELet.     Exp ::= "let" Var "be" Exp ":" Typ "in" Exp ":" Typ;             -- let expression
+--TODO: give this types
+EFor.     Exp ::= "for" Var "in" Exp "do" Exp ";" Exp ":" Typ;                     -- preliminary for loop
 
--- TODO: also add these in types, but a bit unclear how to do the refinements
-ELam.     Exp ::= "Λ" [TVar] "λ"  [Param] "->" Exp ":" Typ; -- lambda abstraction
-EAp.      Exp ::= "ap" "[" Exp ":" Typ  ";" [Arg] "]";                -- application
+ELam.     Exp ::= "Λ" [TVar] "λ"  [Param] "->" Exp ":" Typ;                -- lambda abstraction
+EAp.      Exp ::= "ap" "[" Exp ":" Typ  ";" [Arg] "]";                     -- application
 ETAp.     Exp ::= "tap" "[" Exp ":" Typ ";" Typ"]";                        -- type application
+
 
 ECmd.     Exp ::= "cmd" "[" Typ "]" Cmd;                                   -- encapsulation
 EQloc.    Exp ::= "&" Key;                                                 -- qubit locations TODO: still needed?
@@ -136,3 +153,9 @@ CNewArr. Cmd ::= "arrnew" "[" Typ "]" "(" Nat ";" Var "." Cmd ")";       -- new 
 CGap.    Cmd ::= Uni "(" Exp ")";                                        -- unitary gate application
 CDiag.   Cmd ::= "D" "(" Uni "," Uni ";" Exp "," Exp ")";                -- diagonal gate application
 CMeas.   Cmd ::= "meas" "(" Exp ")";                                     -- measurement
+
+
+--Function boxes (creating these just for printing purposes)
+Funcexp. Funcexp ::= "funcexp:" [TVar] "λ"  [Param] "->" Exp ":" Typ;
+Functyp. Functyp ::= "functyp:" [TVar] "." [Typ] ";" Typ  "requires" [Constr] "ensures" [Constr] ")";
+Funcdef. Funcdef ::= "funcdef:" Var Funcexp Functyp "done";

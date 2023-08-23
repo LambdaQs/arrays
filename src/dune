@@ -64,14 +64,20 @@
  (wrapped false))
 
 (library
+ (name arrays)
+ (modules Arrays)
+ (libraries lambdaqs_grammar))
+
+(library
  (name elab)
  (modules Elab)
  (libraries qsharp_grammar lambdaqs_grammar))
 
+
 (executable
  (name run_elab)
  (modules Run_elab)  ; The module name corresponds to "Run_elab.ml"
- (libraries elab)
+ (libraries elab arrays)
  (modes native))
 
 ; (library
@@ -79,8 +85,26 @@
 ;  (modules Clonecheck)
 ;  (libraries elab z3))
 
+; (executable
+;  (name clonecheck)
+;  (modules Clonecheck SampleLQSProgs)  
+;  (libraries elab z3 lambdaqs_grammar)
+;  (modes native))
+
+; (executable
+;  (name detcons)
+;  (modules Detcons) 
+;  (libraries elab lambdaqs_grammar arrays)
+;  (modes native))
+
+(library
+ (name detcons)
+ (modules detcons)
+ (libraries elab lambdaqs_grammar))
+
+
 (executable
- (name clonecheck)
- (modules Clonecheck SampleLQSProgs)  ; The module name corresponds to "Run_clonecheck.ml"
- (libraries elab z3 lambdaqs_grammar)
+ (name cnotcheck)
+ (modules Cnotcheck)  
+ (libraries elab z3 detcons lambdaqs_grammar arrays)
  (modes native))

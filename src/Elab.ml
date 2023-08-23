@@ -8,9 +8,14 @@ open Either
 
 (* open Z3 *)
 
+let var_to_string (v : var) = ShowLambdaQs.show (ShowLambdaQs.showVar v)
+
 let exp_to_string (e : exp) = ShowLambdaQs.show (ShowLambdaQs.showExp e)
 
 let typ_to_string (t : typ) = ShowLambdaQs.show (ShowLambdaQs.showTyp t)
+
+let constr_to_string (c : constr) =
+  ShowLambdaQs.show (ShowLambdaQs.showConstr c)
 
 let nyi s = failwith ("NYI: " ^ s)
 
@@ -443,13 +448,13 @@ let rec typeof (term : lqsterm) (env : env_t) : typ =
         failwith ("variable name not found: " ^ var_name)
     | Some t ->
         t )
-  | Left (EArg _) ->
-      failwith
-        "EArg should not show up here since they are only used in constraints"
   | Left EWld ->
       failwith "TODO: EWld"
   | Left (ELet (v, e1, t1, e2, t2)) ->
       t2 (* TODO: run tests to make sure this is sufficient *)
+  | Left (EFor (i, range, body, scope, scp_ty)) ->
+      (* we just give the type after the loop *)
+      scp_ty
   | Left (ELam (tvs, params, ret_e, ret_t)) ->
       let intys = List.map get_param_type params in
       TFun (tvs, intys, ret_t, [], [])
@@ -824,8 +829,61 @@ and elab_stmts (stmts : stm list) (env : env_t) : lqsterm =
       failwith "Elif statement does not occur after an If statement"
   | SElse scope :: stmts' ->
       failwith "Else statement does not occur after an If statement"
-  | SFor (bnd, exp, scope) :: stmts' ->
-      nyi "statement SFor"
+  | SFor (bnd, range, Scp body) :: stmts' -> (
+    match bnd with
+    | BndWild -> (
+        let r = elab_exp range env in
+        let b = elab_stmts body env in
+        let s = elab_stmts stmts' env in
+        let sty = typeof s env in
+        (* FIXME: change the structure of this/figure out when to make exp or command *)
+        match (b, s) with
+        | Left e_b, Left e_s ->
+            Left (EFor (wild_var, r, e_b, e_s, sty))
+        | Left e_b, Right c_s ->
+            Left (EFor (wild_var, r, e_b, ECmd (sty, c_s), sty))
+        | Right c_b, Left e_s ->
+            Left (EFor (wild_var, r, ECmd (typeof b env, c_b), e_s, sty))
+            (* FIXME: for eg, how to make this a command? *)
+        | Right c_b, Right c_s ->
+            Left
+              (EFor
+                 ( wild_var
+                 , r
+                 , ECmd (typeof b env, c_b)
+                 , ECmd (typeof s env, c_s)
+                 , sty ) ) )
+    | BndName (UIdent var) -> (
+        let r = elab_exp range env in
+        match typeof (Left r) env with
+        | TRng -> (
+            let vars' = Strmap.add var TInt env.vars in
+            (* note that we done want the variable for the rest of the statements *)
+            let b = elab_stmts body {env with vars= vars'} in
+            let s = elab_stmts stmts' env in
+            let sty = typeof s env in
+            match (b, s) with
+            | Left e_b, Left e_s ->
+                Left (EFor (MVar (Ident var), r, e_b, e_s, sty))
+            | Left e_b, Right c_s ->
+                Left (EFor (MVar (Ident var), r, e_b, ECmd (sty, c_s), sty))
+            | Right c_b, Left e_s ->
+                Left
+                  (EFor (MVar (Ident var), r, ECmd (typeof b env, c_b), e_s, sty)
+                  )
+                (* FIXME: for eg, how to make this a command? *)
+            | Right c_b, Right c_s ->
+                Left
+                  (EFor
+                     ( MVar (Ident var)
+                     , r
+                     , ECmd (typeof b env, c_b)
+                     , ECmd (typeof s env, c_s)
+                     , sty ) ) )
+        | _ ->
+            failwith "Expected r to be a range" )
+    | BndTplA bnds ->
+        nyi "list binds" )
   | SWhile (exp, scope) :: stmts' ->
       nyi "statement SWhile"
   (* TODO: can we assume that when SUntil appears, SRep must have come before? *)
@@ -1070,6 +1128,14 @@ and elab_exp (exp : expr) (env : env_t) : exp =
       | TFun (tvs, intys, outy, _, _) ->
           let args = List.map (fun e -> elab_exp e env) es in
           let argtys = List.map (fun e -> typeof (Left e) env) args in
+          (* TODO: add something here that does the following but that accounts for variables. *)
+          (* this allows us to write f ((a,b)) and have it act like f(a,b) *)
+          (* let args' =
+             match args with [ee] -> print_endline (exp_to_string ee); [ee] | _ -> args
+             in         DOES NOT WORK because p has type (t1, t2), so there is a mismatch
+             let argtys' =
+               match argtys with [TProd (aty, bty)] -> print_endline "HA"; [aty; bty] | _ -> argtys
+             in *)
           if checkfor_dup_qubits argtys (*TODO: add better error message *) then
             failwith "clone error!"
           else
@@ -1157,6 +1223,43 @@ and elab_app (func : exp) (funty : typ) (args : exp list) (argtys : typ list)
 
 let parse (c : in_channel) : doc =
   ParQSharp.pDoc LexQSharp.token (Lexing.from_channel c)
+
+(* helpers that deal with functions. Basically to help facilitate adding libraries manually *)
+
+let rec prog_to_func_list (exp : exp) : funcdef list =
+  match exp with
+  | ELet
+      ( fvar
+      , ELam (tvs, params, retexp, retty)
+      , TFun (tvs', tys, retty', reqs, ens)
+      , e2
+      , t2 ) ->
+      Funcdef
+        ( fvar
+        , Funcexp (tvs, params, retexp, retty)
+        , Functyp (tvs', tys, retty', reqs, ens) )
+      :: prog_to_func_list e2
+  | _ ->
+      []
+
+(* TODO: be consisten with using exps or funcdefs *)
+let add_range_predicate (funcprog : exp) (arg_num : int) : exp =
+  match funcprog with
+  | ELet
+      ( MVar (Ident func_name)
+      , ELam (tvs, params, retexp, retty)
+      , TFun (tvs', tys, retty', reqs, ens)
+      , e2
+      , t2 ) ->
+      let range_req = CrIsRange (CrArg arg_num) in
+      ELet
+        ( MVar (Ident func_name)
+        , ELam (tvs, params, retexp, retty)
+        , TFun (tvs', tys, retty', range_req :: reqs, ens)
+        , e2
+        , t2 )
+  | _ ->
+      failwith "incorrect function format"
 
 (* What follows was moved to Run_elab.ml *)
 

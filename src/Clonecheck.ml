@@ -49,8 +49,6 @@ let mk_z3_exp_mul (ctx : Z3.context) (i1 : z3_exp) (i2 : z3_exp) : z3_exp =
   | _ ->
       failwith "expected Z3_Int, got something else instead"
 
-
-
 type env_t = {vars: typ Strmap.t; z3vars: z3_exp Strmap.t; ret_count: int}
 
 (* NB!!!!!! Nowhere do we ever check that the ensures statements actually are true based on what
@@ -208,7 +206,7 @@ let rec add_params_to_ctx (params : param list) (env : env_t) (ctx : Z3.context)
 let get_z3_qarr_exp (params : z3_exp list) (ret : z3_exp) (exp : exp) :
     FuncDecl.func_decl =
   match exp with
-  | EArg (BNat i) -> (
+  | EArg i -> (
     match List.nth params i with
     | Z3_Qarr (arr, len) ->
         arr
@@ -226,7 +224,7 @@ let get_z3_qarr_exp (params : z3_exp list) (ret : z3_exp) (exp : exp) :
 let get_z3_qarr_length_exp (params : z3_exp list) (ret : z3_exp) (exp : exp) :
     Expr.expr =
   match exp with
-  | EArg (BNat i) -> (
+  | EArg i -> (
     match List.nth params i with
     | Z3_Qarr (arr, len) ->
         len
@@ -245,18 +243,24 @@ let get_z3_qarr_length_exp (params : z3_exp list) (ret : z3_exp) (exp : exp) :
 let rec get_z3_int_exp (params : z3_exp list) (ret : z3_exp) (exp : exp)
     (ctx : Z3.context) : Expr.expr =
   match exp with
-  | EArg (BNat i) -> (
+  | EArg i -> (
     match List.nth params i with
     | Z3_Int i' ->
         i'
+    | Z3_Qall i' ->
+        i'
+    | Z3_no_ret ->
+        failwith "PE"
     | _ ->
-        failwith "expected Z3_Int, got something else" )
+        failwith ("expected Z3_Int, got something else: " ^ exp_to_string exp) )
   | EVar (MVar (Ident "RET")) -> (
     match ret with
     | Z3_Int i' ->
         i'
+    | Z3_Qall i' ->
+        i'
     | _ ->
-        failwith "expected Z3_Int, got something else" )
+        failwith ("expected Z3_Int, got something else: " ^ exp_to_string exp) )
   | EVar (MVar (Ident "i")) ->
       let int_sort = Integer.mk_sort ctx in
       Quantifier.mk_bound ctx 0 int_sort
@@ -278,6 +282,14 @@ let rec get_z3_int_exp (params : z3_exp list) (ret : z3_exp) (exp : exp)
       let i1' = get_z3_int_exp params ret i1 ctx in
       let i2' = get_z3_int_exp params ret i2 ctx in
       Arithmetic.mk_sub ctx [i1'; i2']
+  | EMul (i1, i2) ->
+      let i1' = get_z3_int_exp params ret i1 ctx in
+      let i2' = get_z3_int_exp params ret i2 ctx in
+      Arithmetic.mk_mul ctx [i1'; i2']
+  | EMod (i1, i2) ->
+      let i1' = get_z3_int_exp params ret i1 ctx in
+      let i2' = get_z3_int_exp params ret i2 ctx in
+      Arithmetic.Integer.mk_mod ctx i1' i2'
   | EInt i ->
       Integer.mk_numeral_i ctx i
   | _ ->
@@ -367,68 +379,35 @@ let rec generate_constraint_exp (params : z3_exp list) (ret : z3_exp)
 (* This function checks to see if there is a counter example witness for a constraint *)
 let check_for_constr_witness (model_name : string) (params : z3_exp list)
     (ret : z3_exp) (cons : constr) (ctx : Z3.context) (solver : Solver.solver) =
-  ( match cons with
-  | CBool (EAp (EVar (MVar (Ident "is_range")), _, [Arg (EArg i, _)])) ->
-      failwith "TODO: range"
-  | CBool _ ->
-      failwith "TODO: CBool"
-  | CLt (i1, i2) ->
-      let i1' = get_z3_int_exp params ret i1 ctx in
-      let i2' = get_z3_int_exp params ret i2 ctx in
-      let ge = Arithmetic.mk_ge ctx i1' i2' in
-      Solver.add solver [ge]
-  | CLe (i1, i2) ->
-      let i1' = get_z3_int_exp params ret i1 ctx in
-      let i2' = get_z3_int_exp params ret i2 ctx in
-      let gt = Arithmetic.mk_gt ctx i1' i2' in
-      Solver.add solver [gt]
-  | CGt (i1, i2) ->
-      let i1' = get_z3_int_exp params ret i1 ctx in
-      let i2' = get_z3_int_exp params ret i2 ctx in
-      let le = Arithmetic.mk_le ctx i1' i2' in
-      Solver.add solver [le]
-  | CGe (i1, i2) ->
-      let i1' = get_z3_int_exp params ret i1 ctx in
-      let i2' = get_z3_int_exp params ret i2 ctx in
-      let lt = Arithmetic.mk_lt ctx i1' i2' in
-      Solver.add solver [lt]
-  | CEq (i1, i2) ->
-      let i1' = get_z3_int_exp params ret i1 ctx in
-      let i2' = get_z3_int_exp params ret i2 ctx in
-      let eq = Boolean.mk_eq ctx i1' i2' in
-      let neq = Boolean.mk_not ctx eq in
-      Solver.add solver [neq]
-  | CNeq (i1, i2) ->
-      let i1' = get_z3_int_exp params ret i1 ctx in
-      let i2' = get_z3_int_exp params ret i2 ctx in
-      let eq = Boolean.mk_eq ctx i1' i2' in
-      Solver.add solver [eq]
-  | CAnd (c1, c2) ->
-      failwith "TODO: CAnd"
-  | COr (c1, c2) ->
-      failwith "TODO: COr"
-  | CImp (c1, c2) ->
-      failwith "TODO: CImp"
-  | CForall (v, c) ->
-      failwith "TODO: CForall" ) ;
+  let cons' = generate_constraint_exp params ret cons ctx in
+  let neggate_cons = Boolean.mk_not ctx cons' in
+  (* let _ = Solver.add solver [neggate_cons] in *)
   (* Check satisfiability *)
-  match Solver.check solver [] with
+  ( match Solver.check solver [] with
+  | Solver.SATISFIABLE ->
+      ()
+  | _ ->
+      print_endline "NOT SAT BEFORE CONSTRAINT, SOMETHING WENT WRONG." ) ;
+  match Solver.check solver [neggate_cons] with
   | Solver.SATISFIABLE -> (
     (* Print model if satisfiable *)
     match Solver.get_model solver with
     | Some m ->
-        failwith
-          ( "SAT:\n" ^ Model.to_string m
+        (* TO print the solver:  *)
+        let mes =
+          "SAT:\n" ^ Model.to_string m
           ^ "\nThe above witness shows that a constraint in " ^ model_name
-          ^ " may not be held" )
+          ^ " may not be held"
+        in
+        (* uncomment out the next like for a better error message where \n works *)
+        (* print_endline mes;  *)
+        failwith mes
     | None ->
         print_endline
           "No model found although constraints may be satisfiable: this means \
            we don't know if a constraint holds." )
   | _ ->
-      ()
-(* print_endline
-   ("Not satisfiable: this means that " ^ model_name ^ " was a success") *)
+      print_endline ("succesful " ^ model_name)
 
 (**********************************)
 (* interesting the asymmetry here *)
@@ -437,27 +416,40 @@ let check_for_constr_witness (model_name : string) (params : z3_exp list)
 (* *)
 (* This first set is called during function definition *)
 (* *)
-let rec add_reqs_to_solver (params : z3_exp list) (reqs : constr list)
-    (ctx : Z3.context) (solver : Solver.solver) =
+let rec add_reqs_to_solver (func_name : string) (params : z3_exp list)
+    (reqs : constr list) (ctx : Z3.context) (solver : Solver.solver) =
   match reqs with
   | req :: reqs' ->
       let con = generate_constraint_exp params Z3_no_ret req ctx in
       let _ = Solver.add solver [con] in
-      add_reqs_to_solver params reqs' ctx solver
-  | [] ->
-      ()
+      add_reqs_to_solver func_name params reqs' ctx solver
+  | [] -> (
+      let model_name = "[define " ^ func_name ^ "]" in
+      match Solver.check solver [] with
+      | Solver.SATISFIABLE -> (
+        (* Print model if satisfiable *)
+        match Solver.get_model solver with
+        | Some m ->
+            ()
+        | None ->
+            print_endline ("Possibility for no valid arguments in " ^ model_name)
+        )
+      | _ ->
+          failwith ("No valid arguments in " ^ model_name) )
 
 (*These constrs are inverted *)
 let rec check_ens_are_ensured (func_name : string) (params : z3_exp list)
     (ret_z3 : z3_exp) (ens : constr list) (ctx : Z3.context)
     (solver : Solver.solver) =
-  (* match ens with
-     | en :: ens' ->
-         let model_name = "[define " ^ func_name ^ "]" in
-         let _ = check_for_constr_witness model_name params ret_z3 en ctx solver in
-         check_ens_are_ensured func_name params ret_z3 ens' ctx solver
-     | [] -> *)
-  ()
+  match ens with
+  | CBool (EVar (MVar (Ident "SKIP_ENS"))) :: ens' ->
+      print_endline ("skipping ensure check for " ^ func_name)
+  | en :: ens' ->
+      let model_name = "[define " ^ func_name ^ "]" in
+      let _ = check_for_constr_witness model_name params ret_z3 en ctx solver in
+      check_ens_are_ensured func_name params ret_z3 ens' ctx solver
+  | [] ->
+      ()
 
 (***)
 (* This second set is called during function application *)
@@ -479,6 +471,8 @@ let rec check_reqs_are_satisfied (func_name : string) (args : z3_exp list)
 let rec add_ens_to_solver (args : z3_exp list) (ret : z3_exp)
     (ens : constr list) (ctx : Z3.context) (solver : Solver.solver) =
   match ens with
+  | CBool (EVar (MVar (Ident "SKIP_ENS"))) :: ens' ->
+      add_ens_to_solver args ret ens' ctx solver
   | en :: ens' ->
       let con = generate_constraint_exp args ret en ctx in
       let _ = Solver.add solver [con] in
@@ -505,9 +499,12 @@ let rec add_ens_to_solver (args : z3_exp list) (ret : z3_exp)
      | _ ->
          failwith "TODO: get_z3_term_of_exp" *)
 
-(* FIXME: seems odd that there is this and also the get_z3_int_exp, etc... functions 
-   above. Why are there both? I guess the ones above are meant to be used only for 
-   constraints? But this could be bad repeated code in the end. *)         
+(* FIXME: seems odd that there is this and also the get_z3_int_exp, etc... functions
+   above. Why are there both? I guess the ones above are meant to be used only for
+   constraints? But this could be bad repeated code in the end. *)
+(* I guess the reason is that we are a bit more limited in the variables that are
+   referenced in the constaints; many different things can happen in a body. Can
+   still probably combine the two functions, though *)
 let rec check_body_applications (body : exp) (env : env_t) (ctx : Z3.context)
     (solver : Solver.solver) : z3_exp * env_t =
   match body with
@@ -568,13 +565,47 @@ let rec check_body_applications (body : exp) (env : env_t) (ctx : Z3.context)
       (* FIXME: get this better error message to work *)
       (* ("trying to apply function, but instead got type: " ^ ShowLambdaQs.show (ShowLambdaQs.showTyp fty)) *)
   | ECmd _ ->
-      failwith "TODO ECmd"
-  | EArrIdx (ty, arr, ind) ->
-      failwith "TODO EArrIdx"
-  | EArrLen arr ->
-    (match check_body_applications arr env ctx solver with 
-    | (Z3_Qarr (arr', len), env') -> (Z3_Int len, env')
-    | _ -> failwith "Expected Z3_Qarr, got something else instead")  
+      (Z3_no_ret, env)
+  | EArrIdx (ty, arr, ind) -> (
+    match check_body_applications ind env ctx solver with
+    | Z3_Int i, env' -> (
+      match check_body_applications arr env' ctx solver with
+      | Z3_Qarr (arr', len), env'' ->
+          let ind_in_bound =
+            Boolean.mk_and ctx
+              [ Arithmetic.mk_ge ctx i (Integer.mk_numeral_i ctx 0)
+              ; Arithmetic.mk_lt ctx i len ]
+          in
+          let not_bounds = Boolean.mk_not ctx ind_in_bound in
+          let arr_name = Symbol.to_string (FuncDecl.get_name arr') in
+          ( match Solver.check solver [not_bounds] with
+          | Solver.SATISFIABLE -> (
+            (* Print model if satisfiable *)
+            match Solver.get_model solver with
+            | Some m ->
+                (* TO print the solver:  *)
+                print_endline
+                  ( "Potential out of bounds error while indexing into array "
+                  ^ arr_name )
+            | None ->
+                print_endline
+                  "No model found although constraints may be satisfiable: \
+                   this means we don't know if a constraint holds." )
+          | _ ->
+              print_endline ("succesful index into " ^ arr_name) ) ;
+          (Z3_Qall (FuncDecl.apply arr' [i]), env'')
+      | _ ->
+          failwith "expected Z3_Qarr in EArrIdx, got something else"
+          (* TODO: could get some ensures statements to pass by doing more here *)
+      )
+    | _ ->
+        (Z3_no_ret, env) )
+  | EArrLen arr -> (
+    match check_body_applications arr env ctx solver with
+    | Z3_Qarr (arr', len), env' ->
+        (Z3_Int len, env')
+    | _ ->
+        failwith "Expected Z3_Qarr, got something else instead" )
   | EIte (ty, b, e1, e2) ->
       (* TODO: find a way to check both branches *)
       let _ = check_body_applications e1 env ctx solver in
@@ -584,8 +615,8 @@ let rec check_body_applications (body : exp) (env : env_t) (ctx : Z3.context)
   | ETriv ->
       (Z3_no_ret, env)
   (* these that follow are weird because instead of making a return exp, we just return the actual z3
-     exp. So i think this actually helps us check the ensures statements, even though this is not the 
-     point of the project. When EAp, the application could be simple, but we always make a new 
+     exp. So i think this actually helps us check the ensures statements, even though this is not the
+     point of the project. When EAp, the application could be simple, but we always make a new
      z3 expression, wasting space i think. But since we know exactly what the function is here, we can
      avoid this. *)
   | EPow _ ->
@@ -595,7 +626,7 @@ let rec check_body_applications (body : exp) (env : env_t) (ctx : Z3.context)
     | i1', env' -> (
       match check_body_applications i2 env' ctx solver with
       | i2', env'' ->
-          (mk_z3_exp_mul ctx i1' i2', env'') ) )    
+          (mk_z3_exp_mul ctx i1' i2', env'') ) )
   | EDiv _ ->
       failwith "TODO: check_body_applications: EDiv"
   | EMod _ ->
@@ -624,12 +655,12 @@ let rec check_body_applications (body : exp) (env : env_t) (ctx : Z3.context)
       failwith "TODO: check_body_applications: EEql"
   | ENEql _ ->
       failwith "TODO: check_body_applications: ENeql"
-  | ERng _ ->
-      failwith "TODO: check_body_applications: ERng"
-  | ERngR _ ->
-      failwith "TODO: check_body_applications: ERngR"
-  | ERngL _ ->
-      failwith "TODO: check_body_applications: ERngL"
+  | ERng (l, u) ->
+      (Z3_no_ret, env)
+  | ERngR u ->
+      (Z3_no_ret, env)
+  | ERngL l ->
+      (Z3_no_ret, env)
   | EInt i ->
       (Z3_Int (Integer.mk_numeral_i ctx i), env)
   | EDbl _ ->
@@ -659,9 +690,12 @@ let check_funcdec_for_clone (func_name : string) (tvs : tVar list)
   *)
   (* print_endline (print_exp body); *)
   let z3_params, env' = add_params_to_ctx params env ctx solver in
-  let _ = add_reqs_to_solver z3_params reqs ctx solver in
+  let _ = add_reqs_to_solver func_name z3_params reqs ctx solver in
   let body_z3_exp, env'' = check_body_applications body env' ctx solver in
   check_ens_are_ensured func_name z3_params body_z3_exp ens ctx solver
+
+(* let assertions = Solver.get_assertions solver in
+   List.iter (fun ast -> print_endline (Expr.to_string ast)) assertions *)
 
 (* TODO: add a type checker on the lqs level, or make the one in elab.ml more thoroug,
    i.e., actually check that all the types are what they should be *)
@@ -695,11 +729,6 @@ let rec check_prog_for_clone (exp : exp) (env : env_t) =
 
 let def_env = {vars= empty; z3vars= empty; ret_count= 0}
 
-(* check_prog_for_clone basic_int_prog def_env *)
+let clonecheck_main () = check_prog_for_clone mostrest def_env ;;
 
-let clonecheck1_main () = check_prog_for_clone basic_int_prog def_env
-(* Whatever main routine you want for Clonecheck1 *)
-;;
-
-(* This invokes the main routine for Clonecheck1 *)
-clonecheck1_main ()
+clonecheck_main ()
