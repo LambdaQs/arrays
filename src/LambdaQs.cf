@@ -69,9 +69,12 @@ CrApp.     ConstrExp ::= "capp" Var "(" [ConstrExp] ")";
 CrArg.     ConstrExp ::= Integer;                                                 
 CrRet.     ConstrExp ::= "RET";
 CrExi.     ConstrExp ::= Ident;
+CrFun.     ConstrExp ::= Ident;
 CrInt.     ConstrExp ::= Integer;   
 CrAdd.     ConstrExp ::= "cradd" ConstrExp ConstrExp;
 CrSub.     ConstrExp ::= "crsub" ConstrExp ConstrExp;
+CrMul.     ConstrExp ::= "crmul" ConstrExp ConstrExp;
+CrMod.     ConstrExp ::= "crmod" ConstrExp ConstrExp;
 CrIdx.     ConstrExp ::= "cridx" ConstrExp ConstrExp;
 CrLen.     ConstrExp ::= "crlen" ConstrExp;
 
@@ -88,6 +91,7 @@ CrAnd.     Constr ::= "constr" Constr "||" Constr;
 CrOr.      Constr ::= "constr" Constr "&&" Constr;
 CrImp.     Constr ::= "constr" Constr "->" Constr;
 CrForall.  Constr ::= "forall" Ident "," Constr;
+CrSatCons. Constr ::= "satcons" ConstrExp ":" [ConstrExp];
 
 separator ConstrExp ",";
 separator Constr ",";

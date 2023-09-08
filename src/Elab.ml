@@ -83,6 +83,9 @@ let rec equal_types_bool (ty1 : typ) (ty2 : typ) : bool =
       equal_types_bool l1 l2 && equal_types_bool r1 r2
   | TArr (s1, t1), TArr (s2, t2) ->
       s1 = s2 && equal_types_bool t1 t2
+  (* we favor the first arg, so if the first is *)
+  | TAbsArr t1, TArr (s2, t2) ->
+      equal_types_bool t1 t2
   | TAbsArr t1, TAbsArr t2 ->
       equal_types_bool t1 t2
   | _ ->
@@ -160,10 +163,17 @@ let rec elab_type (tyvars : tVar list) (qstyp : tp) : typ =
         failwith "only 2-ples are accepted" )
   | TpFun (ty1, ty2) ->
       TFun ([], [elab_type tyvars ty1], elab_type tyvars ty2, [], [])
-  (* TODO: is TOp the same type as TFun? *)
-  | TpOp (ty1, ty2, chars) ->
-      TFun ([], [elab_type tyvars ty1], elab_type tyvars ty2, [], [])
       (*TODO: what to do with chars here? *)
+  | TpOp ([TpQbit; TpQbit], outy, chars) ->
+      TFun
+        ( []
+        , [TQAll (MKVar (Ident "in0")); TQAll (MKVar (Ident "in1"))]
+        , elab_type tyvars outy
+        , []
+        , [] )
+  | TpOp (intys, outy, chars) ->
+      let intys' = List.map (elab_type tyvars) intys in
+      TFun ([], intys', elab_type tyvars outy, [], [])
   | TpArr typ ->
       TAbsArr (elab_type tyvars typ)
   | TpBInt ->
@@ -221,15 +231,21 @@ let check_retty (theor_retty : tp) (act_retty : typ) (tyvars : tVar list)
          qubit type is from an input list. Although where would an awry tqall even come from ??? *)
       if check_for_qubit_in_input kv args then act_retty
       else failwith "returned TQAll that is not in correct scope"
+  | TpQbit, _ ->
+      failwith "function does not return a qubit"
+      (* FIXME: what about other arrays? We can return an abstract array with a specific array *)
   | TpArr TpQbit, TArr _ ->
       failwith "TODO: checking for TArr Qubit return type"
   | TpArr TpQbit, TAbsArr qall ->
       (* FIXME: from the fixme above, I just assume it would be impossible for a bad TAbsArr to
          show up, but could check that the return came from a param *)
       TAbsArr qall
-  | TpQbit, _ ->
-      failwith "function does not return a qubit"
-      (* FIXME: what about other arrays? We can return an abstract array with a specific array *)
+  | TpArr (TpTpl [TpQbit; TpQbit]), TAbsArr (TProd (TQAll k1, TQAll k2)) ->
+      TAbsArr (TProd (TQAll k1, TQAll k2))
+  | TpArr (TpTpl [TpQbit; TpQbit]), TArr (len, TProd (TQAll k1, TQAll k2)) ->
+      TArr (len, TProd (TQAll k1, TQAll k2))
+  | TpArr (TpTpl [TpQbit; TpQbit]), ty ->
+      type_mismatch_error ty ty
   | _ ->
       equal_types (elab_type tyvars theor_retty) act_retty
 
@@ -1242,8 +1258,17 @@ let rec prog_to_func_list (exp : exp) : funcdef list =
   | _ ->
       []
 
+let rec add_range_predicate (tys : typ list) (i : int) : constr list =
+  match tys with
+  | TAbsArr (TQAll _) :: tys' ->
+      CrIsRange (CrArg i) :: add_range_predicate tys' (i + 1)
+  | _ :: tys' ->
+      add_range_predicate tys' (i + 1)
+  | [] ->
+      []
+
 (* TODO: be consisten with using exps or funcdefs *)
-let add_range_predicate (funcprog : exp) (arg_num : int) : exp =
+let rec assume_ranges (funcprog : exp) : exp =
   match funcprog with
   | ELet
       ( MVar (Ident func_name)
@@ -1251,15 +1276,16 @@ let add_range_predicate (funcprog : exp) (arg_num : int) : exp =
       , TFun (tvs', tys, retty', reqs, ens)
       , e2
       , t2 ) ->
-      let range_req = CrIsRange (CrArg arg_num) in
+      let range_reqs = add_range_predicate tys 0 in 
+      let e2' = assume_ranges e2 in
       ELet
         ( MVar (Ident func_name)
         , ELam (tvs, params, retexp, retty)
-        , TFun (tvs', tys, retty', range_req :: reqs, ens)
-        , e2
+        , TFun (tvs', tys, retty', range_reqs @ reqs, ens)
+        , e2'
         , t2 )
-  | _ ->
-      failwith "incorrect function format"
+  | e -> e 
+
 
 (* What follows was moved to Run_elab.ml *)
 

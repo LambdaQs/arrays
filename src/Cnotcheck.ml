@@ -11,6 +11,7 @@ open Either
 open Elab
 open Detcons
 open Arrays
+open SampleLQSProgs
 open Z3
 open Z3.Arithmetic
 open Z3.Boolean
@@ -47,6 +48,13 @@ let mk_z3_exp_mul (ctx : Z3.context) (i1 : z3_exp) (i2 : z3_exp) : z3_exp =
   match (i1, i2) with
   | Z3_Int i1', Z3_Int i2' ->
       Z3_Int (Arithmetic.mk_mul ctx [i1'; i2'])
+  | _ ->
+      failwith "expected (Z3_Int, Z3_Int), got something else instead"
+
+let mk_z3_exp_mod (ctx : Z3.context) (i1 : z3_exp) (i2 : z3_exp) : z3_exp =
+  match (i1, i2) with
+  | Z3_Int i1', Z3_Int i2' ->
+      Z3_Int (Arithmetic.Integer.mk_mod ctx i1' i2')
   | _ ->
       failwith "expected (Z3_Int, Z3_Int), got something else instead"
 
@@ -216,28 +224,28 @@ let rec add_params_to_ctx (params : param list) (env : env_t) (ctx : Z3.context)
       let z3_qarr = create_z3_array qlist_name ctx solver in
       let i = cardinal env.paramvars in
       let paramvars' = Strmap.add qlist_name i env.paramvars in
-      let env' = {env with paramvars = paramvars'} in
-      let ps, env'' = add_params_to_ctx params' env' ctx solver in 
+      let env' = {env with paramvars= paramvars'} in
+      let ps, env'' = add_params_to_ctx params' env' ctx solver in
       (z3_qarr :: ps, env'')
   | Param (MVar (Ident q_name), TQAll k) :: params' ->
       let z3_qubit = Z3_Qall (Integer.mk_const_s ctx q_name) in
       let i = cardinal env.paramvars in
       let paramvars' = Strmap.add q_name i env.paramvars in
-      let env' = {env with paramvars = paramvars'} in
-      let ps, env'' = add_params_to_ctx params' env' ctx solver in 
+      let env' = {env with paramvars= paramvars'} in
+      let ps, env'' = add_params_to_ctx params' env' ctx solver in
       (z3_qubit :: ps, env'')
   | Param (MVar (Ident int_name), TInt) :: params' ->
       let z3_int = Z3_Int (Integer.mk_const_s ctx int_name) in
       let i = cardinal env.paramvars in
       let paramvars' = Strmap.add int_name i env.paramvars in
-      let env' = {env with paramvars = paramvars'} in
-      let ps, env'' = add_params_to_ctx params' env' ctx solver in 
+      let env' = {env with paramvars= paramvars'} in
+      let ps, env'' = add_params_to_ctx params' env' ctx solver in
       (z3_int :: ps, env'')
   | Param (MVar (Ident var_name), ty) :: params' ->
       let i = cardinal env.paramvars in
       let paramvars' = Strmap.add var_name i env.paramvars in
-      let env' = {env with paramvars = paramvars'} in
-      let ps, env'' = add_params_to_ctx params' env' ctx solver in 
+      let env' = {env with paramvars= paramvars'} in
+      let ps, env'' = add_params_to_ctx params' env' ctx solver in
       (Z3_no_ret :: ps, env'')
   | [] ->
       ([], env)
@@ -341,6 +349,11 @@ let rec generate_constraint_exp (params : z3_exp list) (ret : z3_exp)
              None (* No skolem id *) )
       in
       forall_expr
+  | CrSatCons (CrArg i, args) ->
+      print_endline "Warning: Applying abstract operation." ;
+      mk_true ctx
+  | CrSatCons (_, args) ->
+      failwith "CrSatCons: impossible case"
 
 and constrExp_to_z3_exp (params : z3_exp list) (ret : z3_exp) (exp : constrExp)
     (env : env_t) (ctx : Z3.context) (solver : Solver.solver) : z3_exp =
@@ -378,6 +391,8 @@ and constrExp_to_z3_exp (params : z3_exp list) (ret : z3_exp) (exp : constrExp)
       (* FIXME: eventually, this will need to count the number of the exivar *)
       let exivar = Quantifier.mk_bound ctx 0 int_sort in
       Z3_Int exivar
+  | CrFun _ ->
+      failwith "impossible case: crfun should not appear in a clone constraint"
   | CrInt i ->
       let i = Integer.mk_numeral_i ctx i in
       Z3_Int i
@@ -389,6 +404,14 @@ and constrExp_to_z3_exp (params : z3_exp list) (ret : z3_exp) (exp : constrExp)
       let i1' = constrExp_to_z3_exp params ret i1 env ctx solver in
       let i2' = constrExp_to_z3_exp params ret i2 env ctx solver in
       mk_z3_exp_sub ctx i1' i2'
+  | CrMul (i1, i2) ->
+      let i1' = constrExp_to_z3_exp params ret i1 env ctx solver in
+      let i2' = constrExp_to_z3_exp params ret i2 env ctx solver in
+      mk_z3_exp_mul ctx i1' i2'
+  | CrMod (i1, i2) ->
+      let i1' = constrExp_to_z3_exp params ret i1 env ctx solver in
+      let i2' = constrExp_to_z3_exp params ret i2 env ctx solver in
+      mk_z3_exp_mod ctx i1' i2'
   | CrIdx (arr, i) ->
       let arr' = constrExp_to_z3_exp params ret arr env ctx solver in
       let i' = constrExp_to_z3_exp params ret i env ctx solver in
@@ -441,6 +464,9 @@ let check_for_constr_witness (model_name : string) (params : z3_exp list)
       ()
   | _ ->
       print_endline "NOT SAT BEFORE CONSTRAINT, SOMETHING WENT WRONG." ) ;
+  (* let assertions = Solver.get_assertions solver in
+     List.iter (fun ast -> print_endline (Expr.to_string ast)) assertions ;
+     print_endline (Expr.to_string neggate_cons) ; *)
   match Solver.check solver [neggate_cons] with
   | Solver.SATISFIABLE -> (
     (* Print model if satisfiable *)
@@ -476,6 +502,16 @@ let rec check_cnot_applications (func_name : string) (params : z3_exp list)
   | [] ->
       ()
 
+(* FIXME: FIXME: do this in a better way, perhaps make replace_args_in_con more general in Detcons.ml *)
+let rec remove_bad (reqs : constr list) : constr list =
+  match reqs with
+  | CrIsRange _ :: reqs' ->
+      remove_bad reqs'
+  | r :: reqs' ->
+      r :: remove_bad reqs'
+  | [] ->
+      []
+
 let rec check_prog_for_clone (exp : exp) (env : env_t) =
   match exp with
   | ELet
@@ -494,7 +530,8 @@ let rec check_prog_for_clone (exp : exp) (env : env_t) =
       (* adding reqs about these z3 params to the solver *)
       let _ = add_reqs_to_solver func_name z3_params reqs env' ctx solver in
       (* getting the cnot constraints *)
-      let cnot_cons = generate_cnot_reqs tvs params retexp env' in
+      let cnot_cons = remove_bad (generate_clone_reqs tvs params retexp env') in
+      print_endline ("constraints for " ^ func_name ^ ":") ;
       let _ =
         ShowLambdaQs.show
           (ShowLambdaQs.showList ShowLambdaQs.showConstr cnot_cons)
@@ -506,16 +543,22 @@ let rec check_prog_for_clone (exp : exp) (env : env_t) =
       let funcdefs' =
         Strmap.add func_name
           ( ELam (tvs, params, retexp, retty)
-          , TFun (tvs', tys, retty', reqs, ens) )
+            (* reqs here is empty for the time being *)
+          , TFun (tvs', tys, retty', cnot_cons @ reqs, ens) )
           env.funcdefs
       in
       (* note that we just want to use env here, since we dont want the params *)
       let env'' = {env with funcdefs= funcdefs'} in
+      print_endline ("done with analysis for " ^ func_name) ;
+      print_endline "\n" ;
       check_prog_for_clone e2 env''
   | _ ->
       print_endline "done"
 
-let def_env = {funcdefs= empty; bodyvars= empty; exivars= empty; paramvars = empty}
+(* FIXME: get rid of the different environments to avoid all this confusion *)
+
+let def_env2 =
+  {funcdefs= empty; bodyvars= empty; exivars= empty; paramvars= empty}
 
 let funcdefs =
   Strmap.add (get_func_name qMost)
@@ -528,14 +571,82 @@ let funcdefs' =
     funcdefs
 
 let funcdefs'' =
-  Strmap.add (get_func_name cnot)
-    (get_func_exp cnot, get_func_type cnot)
+  Strmap.add (get_func_name qRev)
+    (get_func_exp qRev, get_func_type qRev)
     funcdefs'
 
-let arr_env = {def_env with funcdefs= funcdefs''}
+let funcdefs''' =
+   Strmap.add (get_func_name qTail)
+     (get_func_exp qTail, get_func_type qTail)
+     funcdefs''
 
-let cnotcheck_main () = check_prog_for_clone (add_range_predicate applyCNOTchain 0) arr_env ;;
+let funcdefs'''' =
+  Strmap.add (get_func_name cnot)
+    (get_func_exp cnot, get_func_type cnot)
+    funcdefs'''
 
-(* let cnotcheck_main () = check_prog_for_clone applyCNOTchain arr_env ;; *)
+let arr_env2 = {def_env2 with funcdefs= funcdefs''''}
 
-cnotcheck_main ()
+(*  *)
+(*  *)
+(*  *)
+
+let def_env = {qrefs= empty; qalls= empty; vars= empty}
+
+let arr_vars = Strmap.add (get_func_name qMost) (get_func_type qMost) empty
+
+let arr_vars' = Strmap.add (get_func_name qRest) (get_func_type qRest) arr_vars
+
+let arr_vars'' = Strmap.add (get_func_name qRev) (get_func_type qRev) arr_vars'
+
+let arr_vars''' =
+   Strmap.add (get_func_name qTail) (get_func_type qTail) arr_vars''
+
+let arr_vars'''' =
+  Strmap.add (get_func_name cnot) (get_func_type cnot) arr_vars'''
+
+let arrays_env = {def_env with vars= arr_vars''''}
+
+let get_env (sysargs : key array) : Elab.env_t =
+  if Array.exists (fun s -> s = "-arrlib") Sys.argv then arrays_env else def_env
+
+let elab_main () =
+  (* TODO: add real cmd line arg parsing *)
+  if Array.length Sys.argv < 2 then
+    failwith
+      "Usage: dune exec ./run_elab.exe -- <file_name> (optional -arrlib or \
+       -assume_range flag)"
+  else
+    let env = get_env Sys.argv in
+    let channel = open_in Sys.argv.(1) in
+    let in_ast = Elab.parse channel in
+    print_string
+      ( "[Input abstract syntax]\n\n"
+      ^ (fun x -> ShowQSharp.show (ShowQSharp.showDoc x)) in_ast
+      ^ "\n\n" ) ;
+    (* TODO: create an environment where basic functions are defined *)
+    let out_ast = elab in_ast env in
+    print_string
+      ( "[Output abstract syntax]\n\n"
+      ^ ShowLambdaQs.show (ShowLambdaQs.showExp out_ast)
+      ^ "\n\n[Linearized tree]\n\n"
+      ^ PrintLambdaQs.printTree PrintLambdaQs.prtExp out_ast
+      ^ "\n\n[Funcdef list]\n\n"
+      ^ ShowLambdaQs.show
+          (ShowLambdaQs.showList ShowLambdaQs.showFuncdef
+             (prog_to_func_list out_ast) )
+      ^ "\n\n" ) ;
+    if Array.exists (fun s -> s = "-assume_range") Sys.argv then
+      check_prog_for_clone (assume_ranges out_ast) arr_env2
+    else check_prog_for_clone out_ast arr_env2
+
+let cnotcheck_main () = check_prog_for_clone qApplyToEachZip arr_env2 ;;
+
+(* let cnotcheck_main () =
+     check_prog_for_clone (add_range_predicate mostrestzip 0) arr_env
+   ;; *)
+
+elab_main ()
+
+(*
+   cnotcheck_main () *)

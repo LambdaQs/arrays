@@ -15,9 +15,11 @@ let arr_vars = Strmap.add (get_func_name qMost) (get_func_type qMost) empty
 
 let arr_vars' = Strmap.add (get_func_name qRest) (get_func_type qRest) arr_vars
 
-let arr_vars'' = Strmap.add (get_func_name cnot) (get_func_type cnot) arr_vars'
+let arr_vars'' = Strmap.add (get_func_name qRev) (get_func_type qRev) arr_vars'
 
-let arrays_env = {qrefs= empty; qalls= empty; vars= arr_vars''}
+let arr_vars''' = Strmap.add (get_func_name cnot) (get_func_type cnot) arr_vars''
+
+let arrays_env = {def_env with vars= arr_vars'''}
 
 let get_env (sysargs : key array) : env_t =
   if Array.length Sys.argv = 2 then def_env

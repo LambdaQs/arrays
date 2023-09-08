@@ -69,6 +69,11 @@
  (libraries lambdaqs_grammar))
 
 (library
+ (name sampleLQSProgs)
+ (modules SampleLQSProgs)
+ (libraries lambdaqs_grammar))
+
+(library
  (name elab)
  (modules Elab)
  (libraries qsharp_grammar lambdaqs_grammar))
@@ -106,5 +111,5 @@
 (executable
  (name cnotcheck)
  (modules Cnotcheck)  
- (libraries elab z3 detcons lambdaqs_grammar arrays)
+ (libraries elab z3 detcons lambdaqs_grammar arrays sampleLQSProgs)
  (modes native))

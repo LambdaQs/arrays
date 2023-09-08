@@ -120,285 +120,130 @@ let qRest =
     , ETriv
     , TUnit )
 
-let applyCNOT_oneelem =
+let qRev =
   ELet
-    ( MVar (Ident "ApplyCNOT_oneelem")
+    ( MVar (Ident "qRev")
     , ELam
         ( []
-        , [ Param (MVar (Ident "a"), TAbsArr (TQAll (MKVar (Ident "ql0"))))
-          ; Param (MVar (Ident "i"), TInt) ]
-        , ELet
-            ( MVar (Ident "b")
-            , EAp
-                ( EVar (MVar (Ident "qMost"))
-                , TFun
-                    ( []
-                    , [TAbsArr (TQAll (MKVar (Ident "ql0")))]
-                    , TAbsArr (TQAll (MKVar (Ident "ql0")))
-                    , [CrGt (CrLen (CrArg 0), CrInt 0)]
-                    , [ CrEq (CrLen CrRet, CrSub (CrLen (CrArg 0), CrInt 1))
-                      ; CrForall
-                          ( Ident "i"
-                          , CrImp
-                              ( CrAnd
-                                  ( CrGe (CrExi (Ident "i"), CrInt 0)
-                                  , CrLt (CrExi (Ident "i"), CrLen CrRet) )
-                              , CrEq
-                                  ( CrIdx (CrRet, CrExi (Ident "i"))
-                                  , CrIdx (CrArg 0, CrExi (Ident "i")) ) ) ) ]
-                    )
-                , [ Arg
-                      ( EVar (MVar (Ident "a"))
-                      , TAbsArr (TQAll (MKVar (Ident "ql0"))) ) ] )
-            , TAbsArr (TQAll (MKVar (Ident "ql0")))
-            , ELet
-                ( MVar (Ident "c")
-                , EAp
-                    ( EVar (MVar (Ident "qRest"))
-                    , TFun
-                        ( []
-                        , [TAbsArr (TQAll (MKVar (Ident "ql0")))]
-                        , TAbsArr (TQAll (MKVar (Ident "ql0")))
-                        , [CrGt (CrLen (CrArg 0), CrInt 0)]
-                        , [ CrEq (CrLen CrRet, CrSub (CrLen (CrArg 0), CrInt 1))
-                          ; CrForall
-                              ( Ident "i"
-                              , CrImp
-                                  ( CrAnd
-                                      ( CrGe (CrExi (Ident "i"), CrInt 0)
-                                      , CrLt (CrExi (Ident "i"), CrLen CrRet) )
-                                  , CrEq
-                                      ( CrIdx (CrRet, CrExi (Ident "i"))
-                                      , CrIdx
-                                          ( CrArg 0
-                                          , CrAdd (CrExi (Ident "i"), CrInt 1)
-                                          ) ) ) ) ] )
-                    , [ Arg
-                          ( EVar (MVar (Ident "a"))
-                          , TAbsArr (TQAll (MKVar (Ident "ql0"))) ) ] )
-                , TAbsArr (TQAll (MKVar (Ident "ql0")))
-                , ELet
-                    ( MVar (Ident "_wild_")
-                    , EAp
-                        ( EVar (MVar (Ident "CNOT"))
-                        , TFun
-                            ( []
-                            , [ TQAll (MKVar (Ident "0"))
-                              ; TQAll (MKVar (Ident "1")) ]
-                            , TUnit
-                            , []
-                            , [] )
-                        , [ Arg
-                              ( EArrIdx
-                                  ( TQAll (MKVar (Ident "ql0"))
-                                  , EVar (MVar (Ident "b"))
-                                  , EVar (MVar (Ident "i")) )
-                              , TQAll (MKVar (Ident "ql0")) )
-                          ; Arg
-                              ( EArrIdx
-                                  ( TQAll (MKVar (Ident "ql0"))
-                                  , EVar (MVar (Ident "c"))
-                                  , EVar (MVar (Ident "i")) )
-                              , TQAll (MKVar (Ident "ql0")) ) ] )
-                    , TUnit
-                    , ETriv
-                    , TUnit )
-                , TUnit )
-            , TUnit )
-        , TUnit )
-    , TFun ([], [TAbsArr (TQAll (MKVar (Ident "ql0"))); TInt], TUnit, [], [])
+        , [Param (MVar (Ident "array"), TAbsArr (TQAll (MKVar (Ident "ql0"))))]
+        , EArrIdx
+            ( TAbsArr (TQAll (MKVar (Ident "ql0")))
+            , EVar (MVar (Ident "array"))
+            , ERng (ESub (EArrLen (EVar (MVar (Ident "array"))), EInt 1), EInt 0)
+            )
+        , TAbsArr (TQAll (MKVar (Ident "ql0"))) )
+    , TFun
+        ( []
+        , [TAbsArr (TQAll (MKVar (Ident "ql0")))]
+        , TAbsArr (TQAll (MKVar (Ident "ql0")))
+        , []
+        , [ CrEq (CrLen CrRet, CrLen (CrArg 0))
+          ; CrForall
+              ( Ident "i"
+              , CrImp
+                  ( CrAnd
+                      ( CrGe (CrExi (Ident "i"), CrInt 0)
+                      , CrLt (CrExi (Ident "i"), CrLen CrRet) )
+                  , CrEq
+                      ( CrIdx (CrRet, CrExi (Ident "i"))
+                      , CrIdx
+                          ( CrArg 0
+                          , CrSub
+                              ( CrSub (CrLen (CrArg 0), CrInt 1)
+                              , CrExi (Ident "i") ) ) ) ) ) ] )
     , ETriv
     , TUnit )
 
-let applyCNOTchain =
+let qTail =
   ELet
-    ( MVar (Ident "ApplyCNOTchain")
+    ( MVar (Ident "qTail")
     , ELam
         ( []
-        , [Param (MVar (Ident "a"), TAbsArr (TQAll (MKVar (Ident "ql0"))))]
-        , ELet
-            ( MVar (Ident "b")
-            , EAp
-                ( EVar (MVar (Ident "qMost"))
-                , TFun
-                    ( []
-                    , [TAbsArr (TQAll (MKVar (Ident "ql0")))]
-                    , TAbsArr (TQAll (MKVar (Ident "ql0")))
-                    , [CrGt (CrLen (CrArg 0), CrInt 0)]
-                    , [ CrEq (CrLen CrRet, CrSub (CrLen (CrArg 0), CrInt 1))
-                      ; CrForall
-                          ( Ident "i"
-                          , CrImp
-                              ( CrAnd
-                                  ( CrGe (CrExi (Ident "i"), CrInt 0)
-                                  , CrLt (CrExi (Ident "i"), CrLen CrRet) )
-                              , CrEq
-                                  ( CrIdx (CrRet, CrExi (Ident "i"))
-                                  , CrIdx (CrArg 0, CrExi (Ident "i")) ) ) ) ]
-                    )
-                , [ Arg
-                      ( EVar (MVar (Ident "a"))
-                      , TAbsArr (TQAll (MKVar (Ident "ql0"))) ) ] )
-            , TAbsArr (TQAll (MKVar (Ident "ql0")))
+        , [Param (MVar (Ident "array"), TAbsArr (TQAll (MKVar (Ident "ql0"))))]
+        , EArrIdx
+            ( TQAll (MKVar (Ident "ql0"))
+            , EVar (MVar (Ident "array"))
+            , ESub (EArrLen (EVar (MVar (Ident "array"))), EInt 1) )
+        , TQAll (MKVar (Ident "ql0")) )
+    , TFun
+        ( []
+        , [TAbsArr (TQAll (MKVar (Ident "ql0")))]
+        , TQAll (MKVar (Ident "ql0"))
+        , []
+        , [CrEq (CrRet, CrIdx (CrArg 0, CrSub (CrLen (CrArg 0), CrInt 1)))] )
+    , ETriv
+    , TUnit )
+
+let qApplyToEachZip =
+  ELet
+    ( MVar (Ident "qApplyToEachZip")
+    , ELam
+        ( []
+        , [ Param
+              ( MVar (Ident "doubleElemOp")
+              , TFun
+                  ( []
+                  , [TQAll (MKVar (Ident "in0")); TQAll (MKVar (Ident "in1"))]
+                  , TUnit
+                  , []
+                  , [] ) )
+          ; Param (MVar (Ident "qs1"), TAbsArr (TQAll (MKVar (Ident "ql0"))))
+          ; Param (MVar (Ident "qs2"), TAbsArr (TQAll (MKVar (Ident "ql1")))) ]
+        , EFor
+            ( MVar (Ident "idxQubit")
+            , ERng (EInt 0, ESub (EArrLen (EVar (MVar (Ident "qs1"))), EInt 1))
             , ELet
-                ( MVar (Ident "c")
+                ( MVar (Ident "_wild_")
                 , EAp
-                    ( EVar (MVar (Ident "qRest"))
+                    ( EVar (MVar (Ident "doubleElemOp"))
                     , TFun
                         ( []
-                        , [TAbsArr (TQAll (MKVar (Ident "ql0")))]
-                        , TAbsArr (TQAll (MKVar (Ident "ql0")))
-                        , [CrGt (CrLen (CrArg 0), CrInt 0)]
-                        , [ CrEq (CrLen CrRet, CrSub (CrLen (CrArg 0), CrInt 1))
-                          ; CrForall
-                              ( Ident "i"
-                              , CrImp
-                                  ( CrAnd
-                                      ( CrGe (CrExi (Ident "i"), CrInt 0)
-                                      , CrLt (CrExi (Ident "i"), CrLen CrRet) )
-                                  , CrEq
-                                      ( CrIdx (CrRet, CrExi (Ident "i"))
-                                      , CrIdx
-                                          ( CrArg 0
-                                          , CrAdd (CrExi (Ident "i"), CrInt 1)
-                                          ) ) ) ) ] )
-                    , [ Arg
-                          ( EVar (MVar (Ident "a"))
-                          , TAbsArr (TQAll (MKVar (Ident "ql0"))) ) ] )
-                , TAbsArr (TQAll (MKVar (Ident "ql0")))
-                , EFor
-                    ( MVar (Ident "idxQubit")
-                    , ERng
-                        ( EInt 0
-                        , ESub (EArrLen (EVar (MVar (Ident "a"))), EInt 1) )
-                    , ELet
-                        ( MVar (Ident "_wild_")
-                        , EAp
-                            ( EVar (MVar (Ident "CNOT"))
-                            , TFun
-                                ( []
-                                , [ TQAll (MKVar (Ident "0"))
-                                  ; TQAll (MKVar (Ident "1")) ]
-                                , TUnit
-                                , [CrNeq (CrArg 0, CrArg 1)]
-                                , [] )
-                            , [ Arg
-                                  ( EArrIdx
-                                      ( TQAll (MKVar (Ident "ql0"))
-                                      , EVar (MVar (Ident "b"))
-                                      , EVar (MVar (Ident "idxQubit")) )
-                                  , TQAll (MKVar (Ident "ql0")) )
-                              ; Arg
-                                  ( EArrIdx
-                                      ( TQAll (MKVar (Ident "ql0"))
-                                      , EVar (MVar (Ident "c"))
-                                      , EVar (MVar (Ident "idxQubit")) )
-                                  , TQAll (MKVar (Ident "ql0")) ) ] )
+                        , [ TQAll (MKVar (Ident "in0"))
+                          ; TQAll (MKVar (Ident "in1")) ]
                         , TUnit
-                        , ETriv
-                        , TUnit )
-                    , ETriv
-                    , TUnit )
+                        , []
+                        , [] )
+                    , [ Arg
+                          ( EArrIdx
+                              ( TQAll (MKVar (Ident "ql0"))
+                              , EVar (MVar (Ident "qs1"))
+                              , EVar (MVar (Ident "idxQubit")) )
+                          , TQAll (MKVar (Ident "ql0")) )
+                      ; Arg
+                          ( EArrIdx
+                              ( TQAll (MKVar (Ident "ql1"))
+                              , EVar (MVar (Ident "qs2"))
+                              , EVar (MVar (Ident "idxQubit")) )
+                          , TQAll (MKVar (Ident "ql1")) ) ] )
+                , TUnit
+                , ETriv
                 , TUnit )
+            , ETriv
             , TUnit )
         , TUnit )
-    , TFun ([], [TAbsArr (TQAll (MKVar (Ident "ql0")))], TUnit, [], [])
+    , TFun
+        ( []
+        , [ TFun
+              ( []
+              , [TQAll (MKVar (Ident "in0")); TQAll (MKVar (Ident "in1"))]
+              , TUnit
+              , []
+              , [] )
+          ; TAbsArr (TQAll (MKVar (Ident "ql0")))
+          ; TAbsArr (TQAll (MKVar (Ident "ql1"))) ]
+        , TUnit
+        , [ CrForall
+              ( Ident "idxQubit"
+              , CrImp
+                  ( CrAnd
+                      ( CrGe (CrExi (Ident "idxQubit"), CrInt 0)
+                      , CrLt
+                          ( CrExi (Ident "idxQubit")
+                          , CrSub (CrLen (CrArg 1), CrInt 1) ) )
+                  , CrSatCons
+                      ( CrArg 0
+                      , [ CrIdx (CrArg 1, CrExi (Ident "idxQubit"))
+                        ; CrIdx (CrArg 2, CrExi (Ident "idxQubit")) ] ) ) ) ]
+        , [] )
     , ETriv
     , TUnit )
-
-let textlist =
-  [ CrNeq
-      ( CrIdx (CrApp (MVar (Ident "qMost"), [CrArg 0]), CrArg 1)
-      , CrIdx (CrApp (MVar (Ident "qRest"), [CrArg 0]), CrArg 1) ) ]
-
-let testlist2 =
-  [ Funcdef
-      ( MVar (Ident "ApplyCNOT_oneelem")
-      , Funcexp
-          ( []
-          , [ Param (MVar (Ident "a"), TAbsArr (TQAll (MKVar (Ident "ql0"))))
-            ; Param (MVar (Ident "i"), TInt) ]
-          , ELet
-              ( MVar (Ident "b")
-              , EAp
-                  ( EVar (MVar (Ident "qMost"))
-                  , TFun
-                      ( []
-                      , [TAbsArr (TQAll (MKVar (Ident "ql0")))]
-                      , TAbsArr (TQAll (MKVar (Ident "ql0")))
-                      , [CrGt (CrLen (CrArg 0), CrInt 0)]
-                      , [ CrEq (CrLen CrRet, CrSub (CrLen (CrArg 0), CrInt 1))
-                        ; CrForall
-                            ( Ident "i"
-                            , CrImp
-                                ( CrAnd
-                                    ( CrGe (CrExi (Ident "i"), CrInt 0)
-                                    , CrLt (CrExi (Ident "i"), CrLen CrRet) )
-                                , CrEq
-                                    ( CrIdx (CrRet, CrExi (Ident "i"))
-                                    , CrIdx (CrArg 0, CrExi (Ident "i")) ) ) )
-                        ] )
-                  , [ Arg
-                        ( EVar (MVar (Ident "a"))
-                        , TAbsArr (TQAll (MKVar (Ident "ql0"))) ) ] )
-              , TAbsArr (TQAll (MKVar (Ident "ql0")))
-              , ELet
-                  ( MVar (Ident "c")
-                  , EAp
-                      ( EVar (MVar (Ident "qRest"))
-                      , TFun
-                          ( []
-                          , [TAbsArr (TQAll (MKVar (Ident "ql0")))]
-                          , TAbsArr (TQAll (MKVar (Ident "ql0")))
-                          , [CrGt (CrLen (CrArg 0), CrInt 0)]
-                          , [ CrEq
-                                (CrLen CrRet, CrSub (CrLen (CrArg 0), CrInt 1))
-                            ; CrForall
-                                ( Ident "i"
-                                , CrImp
-                                    ( CrAnd
-                                        ( CrGe (CrExi (Ident "i"), CrInt 0)
-                                        , CrLt (CrExi (Ident "i"), CrLen CrRet)
-                                        )
-                                    , CrEq
-                                        ( CrIdx (CrRet, CrExi (Ident "i"))
-                                        , CrIdx
-                                            ( CrArg 0
-                                            , CrAdd (CrExi (Ident "i"), CrInt 1)
-                                            ) ) ) ) ] )
-                      , [ Arg
-                            ( EVar (MVar (Ident "a"))
-                            , TAbsArr (TQAll (MKVar (Ident "ql0"))) ) ] )
-                  , TAbsArr (TQAll (MKVar (Ident "ql0")))
-                  , ELet
-                      ( MVar (Ident "_wild_")
-                      , EAp
-                          ( EVar (MVar (Ident "CNOT"))
-                          , TFun
-                              ( []
-                              , [ TQAll (MKVar (Ident "0"))
-                                ; TQAll (MKVar (Ident "1")) ]
-                              , TUnit
-                              , [CrNeq (CrArg 0, CrArg 1)]
-                              , [] )
-                          , [ Arg
-                                ( EArrIdx
-                                    ( TQAll (MKVar (Ident "ql0"))
-                                    , EVar (MVar (Ident "b"))
-                                    , EVar (MVar (Ident "i")) )
-                                , TQAll (MKVar (Ident "ql0")) )
-                            ; Arg
-                                ( EArrIdx
-                                    ( TQAll (MKVar (Ident "ql0"))
-                                    , EVar (MVar (Ident "c"))
-                                    , EVar (MVar (Ident "i")) )
-                                , TQAll (MKVar (Ident "ql0")) ) ] )
-                      , TUnit
-                      , ETriv
-                      , TUnit )
-                  , TUnit )
-              , TUnit )
-          , TUnit )
-      , Functyp
-          ([], [TAbsArr (TQAll (MKVar (Ident "ql0"))); TInt], TUnit, [], []) )
-  ]

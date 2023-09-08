@@ -105,7 +105,10 @@ TpPar  . Tp ::= TIdent;
 TpUDT  . Tp ::= QName;
 TpTpl  . Tp ::= "(" [Tp] ")";
 TpFun  . Tp ::= Tp "->" Tp;
-TpOp   . Tp ::= Tp "=>" Tp Chars;
+--FIXME: 
+TpOp   . Tp ::= "(" [Tp] "=>" Tp Chars ")";
+--TpOp   . Tp ::= Tp "=>" Tp Chars;
+--TpOp2   . Tp ::= "(" Tp "," Tp ")" "=>" Tp Chars;
 TpArr  . Tp ::= Tp "[" "]";
 TpBInt . Tp ::= "BigInt";
 TpBool . Tp ::= "Bool"  ;
